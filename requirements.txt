@@ -1,0 +1,11 @@
+# Agent Smith — Ollama Discord Bot Bridge
+# Python dependencies
+
+# Discord bot framework
+discord.py>=2.3.2
+
+# Async HTTP client (used to call the Ollama API)
+aiohttp>=3.9.0
+
+# .env file support
+python-dotenv>=1.0.0

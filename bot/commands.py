@@ -12,7 +12,7 @@ All commands respect the same channel/user permission rules as regular messages.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import discord
 from discord import app_commands
@@ -26,6 +26,9 @@ from bot.permissions import is_channel_allowed, is_user_allowed
 
 log = get_logger(__name__)
 
+if TYPE_CHECKING:
+    from bot.events import ChatCog
+
 
 class SlashCog(commands.Cog):
     """Slash command group for Agent Smith."""
@@ -33,7 +36,7 @@ class SlashCog(commands.Cog):
     def __init__(self, bot: commands.Bot, ollama: OllamaClient, chat_cog: "ChatCog") -> None:  # type: ignore[name-defined]  # noqa: F821
         self.bot = bot
         self.ollama = ollama
-        self.chat_cog = chat_cog  # reference so we can read/reset history
+        self.chat_cog: ChatCog = chat_cog  # reference so we can read/reset history
         # Per-channel model overrides: channel_id → model_name
         self._channel_models: dict[int, str] = {}
 
@@ -64,8 +67,18 @@ class SlashCog(commands.Cog):
         # Defer so Discord doesn't time out while we wait for the model
         await interaction.response.defer(thinking=True)
 
-        model = self._get_model(interaction.channel_id or 0)
-        messages = [{"role": "user", "content": prompt}]
+        channel_id = interaction.channel_id or 0
+        deterministic_reply = self.chat_cog.deterministic_reply_for_prompt(channel_id, prompt)
+        if deterministic_reply is not None:
+            await interaction.followup.send(deterministic_reply)
+            return
+
+        model = self._get_model(channel_id)
+        messages = self.chat_cog.build_ollama_messages(
+            channel_id=channel_id,
+            user_prompt=prompt,
+            include_history=False,
+        )
 
         try:
             response = await self.ollama.chat(messages, model=model)
@@ -94,8 +107,10 @@ class SlashCog(commands.Cog):
 
         channel_id = interaction.channel_id or 0
         self.chat_cog.reset_history(channel_id)
+        reset_text = self.chat_cog.get_reset_marker_text(channel_id) or "unknown time"
         await interaction.response.send_message(
-            "🧹 Conversation history cleared for this channel.", ephemeral=True
+            f"🧹 Conversation history cleared for this channel at {reset_text}.",
+            ephemeral=True,
         )
 
     # ── /model ────────────────────────────────────────────────────────────────

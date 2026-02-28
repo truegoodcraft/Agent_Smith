@@ -57,11 +57,6 @@ class Settings:
     # Empty = all users are allowed.
     ALLOWED_USER_IDS: Set[str] = _get_set("ALLOWED_USER_IDS")
 
-    # ── Rate limiting ────────────────────────────────────────────────────────
-    # Max requests per user in RATE_LIMIT_WINDOW seconds
-    RATE_LIMIT_REQUESTS: int = int(_get("RATE_LIMIT_REQUESTS", "5"))  # type: ignore[arg-type]
-    RATE_LIMIT_WINDOW: int = int(_get("RATE_LIMIT_WINDOW", "60"))  # type: ignore[arg-type]
-
     # ── Context / Memory ─────────────────────────────────────────────────────
     # How many previous message pairs to keep in context per channel
     MAX_CONTEXT_PAIRS: int = int(_get("MAX_CONTEXT_PAIRS", "10"))  # type: ignore[arg-type]

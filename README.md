@@ -90,8 +90,6 @@ All settings live in `.env` (copy from `.env.example`):
 | `OLLAMA_TIMEOUT` | `120` | Request timeout (seconds) |
 | `ALLOWED_CHANNEL_IDS` | *(empty = all)* | Comma-separated channel IDs |
 | `ALLOWED_USER_IDS` | *(empty = all)* | Comma-separated user IDs |
-| `RATE_LIMIT_REQUESTS` | `5` | Max requests per user per window |
-| `RATE_LIMIT_WINDOW` | `60` | Rate limit window (seconds) |
 | `MAX_CONTEXT_PAIRS` | `10` | Message pairs to keep in context |
 | `LOG_LEVEL` | `INFO` | Logging verbosity |
 
@@ -133,11 +131,14 @@ Agent_Smith/
 │   ├── commands.py       # Slash commands
 │   └── permissions.py    # Channel/user allow-list checks
 │
+├── memory/
+│   ├── __init__.py
+│   └── transcript.py     # Channel-scoped transcript persistence
+│
 └── utils/
     ├── __init__.py
     ├── logger.py          # Structured logging
-    ├── formatting.py      # Discord message splitting/truncation
-    └── rate_limiter.py    # Per-user sliding-window rate limiter
+    └── formatting.py      # Discord message splitting/truncation
 ```
 
 ---

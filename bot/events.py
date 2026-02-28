@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import asyncio
 import re
-import time
 from datetime import datetime, timezone
 from collections import defaultdict
 from typing import Dict, List, Optional
@@ -29,10 +28,10 @@ import discord
 from discord.ext import commands
 
 from config.settings import settings
+from memory.transcript import TranscriptStore
 from ollama.client import OllamaClient, OllamaError
 from utils.formatting import split_message
 from utils.logger import get_logger
-from utils.rate_limiter import RateLimiter
 from bot.permissions import is_channel_allowed, is_user_allowed
 
 log = get_logger(__name__)
@@ -47,16 +46,11 @@ class ChatCog(commands.Cog):
     def __init__(self, bot: commands.Bot, ollama: OllamaClient) -> None:
         self.bot = bot
         self.ollama = ollama
-        self.rate_limiter = RateLimiter(
-            max_requests=settings.RATE_LIMIT_REQUESTS,
-            window_seconds=settings.RATE_LIMIT_WINDOW,
-        )
+        self.transcript_store = TranscriptStore()
         # channel_id → list of {"role": ..., "content": ...}
         self._history: Dict[int, List[dict]] = defaultdict(list)
         # channel_id → reset timestamp in UTC
         self._reset_markers: Dict[int, datetime] = {}
-        # user_id:channel_id (str) → monotonic timestamp when notice can be shown again
-        self._rate_limit_notice_until: Dict[str, float] = {}
 
     def get_history(self, channel_id: int) -> List[dict]:
         """Return the conversation history for a channel."""
@@ -238,21 +232,7 @@ class ChatCog(commands.Cog):
         if not content:
             return
 
-        # Rate limiting
-        user_key = str(message.author.id)
         channel_id = message.channel.id
-        notice_key = f"{user_key}:{channel_id}"
-        if not self.rate_limiter.is_allowed(user_key):
-            wait = self.rate_limiter.retry_after(user_key)
-            now = time.monotonic()
-            if now >= self._rate_limit_notice_until.get(notice_key, 0.0):
-                await message.reply(
-                    f"⏳ You're sending messages too fast. Please wait **{wait:.0f}s**.",
-                    mention_author=False,
-                )
-                self._rate_limit_notice_until[notice_key] = now + max(1.0, wait)
-            return
-        self._rate_limit_notice_until.pop(notice_key, None)
 
         log.info(
             "Message from %s in channel %s: %s",
@@ -269,6 +249,7 @@ class ChatCog(commands.Cog):
         # Build context
         self._history[channel_id].append({"role": "user", "content": content})
         self._trim_history(channel_id)
+        asyncio.create_task(self.transcript_store.append(channel_id, "user", content))
 
         # Send a placeholder while we wait for the model
         async with message.channel.typing():
@@ -328,3 +309,6 @@ class ChatCog(commands.Cog):
             {"role": "assistant", "content": accumulated}
         )
         self._trim_history(channel_id)
+        asyncio.create_task(
+            self.transcript_store.append(channel_id, "assistant", accumulated)
+        )

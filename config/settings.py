@@ -57,19 +57,6 @@ class Settings:
     # Empty = all users are allowed.
     ALLOWED_USER_IDS: Set[str] = _get_set("ALLOWED_USER_IDS")
 
-    # ── Context / Memory ─────────────────────────────────────────────────────
-    # How many previous message pairs to keep in context per channel
-    MAX_CONTEXT_PAIRS: int = int(_get("MAX_CONTEXT_PAIRS", "10"))  # type: ignore[arg-type]
-
-    # ── Background memory compaction ─────────────────────────────────────
-
-    MEMORY_ACTIVE_WINDOW: int = int(_get("MEMORY_ACTIVE_WINDOW", "20"))  # type: ignore[arg-type]
-    MEMORY_COMPACT_THRESHOLD: int = int(_get("MEMORY_COMPACT_THRESHOLD", "40"))  # type: ignore[arg-type]
-    MEMORY_COMPACT_SIZE: int = int(_get("MEMORY_COMPACT_SIZE", "20"))  # type: ignore[arg-type]
-    MEMORY_SUMMARY_CHANNEL_ID: int = int(_get("MEMORY_SUMMARY_CHANNEL_ID", "1478093415509131296"))  # type: ignore[arg-type]
-    MEMORY_SUMMARY_MAX_SEGMENTS: int = int(_get("MEMORY_SUMMARY_MAX_SEGMENTS", "5"))  # type: ignore[arg-type]
-    MEMORY_SUMMARY_MODEL: str = _get("MEMORY_SUMMARY_MODEL", "tinyllama")  # type: ignore[assignment]
-
     # ── Logging ──────────────────────────────────────────────────────────────
     LOG_LEVEL: str = _get("LOG_LEVEL", "INFO")  # type: ignore[assignment]
 

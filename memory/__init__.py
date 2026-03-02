@@ -1,1 +1,1 @@
-"""Memory subsystem for background compaction and summarization."""
+"""Memory subsystem — removed. See SOT Delta v0.0.8."""

@@ -45,7 +45,7 @@ def create_bot(ollama: OllamaClient) -> commands.Bot:
 
     # Order matters: ChatCog must be added first so SlashCog can reference it
     chat_cog = ChatCog(bot, ollama)
-    slash_cog = SlashCog(bot, ollama, chat_cog)
+    slash_cog = SlashCog(bot, ollama)
 
     # ── Events ────────────────────────────────────────────────────────────────
 

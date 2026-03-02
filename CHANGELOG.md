@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.0.8] — 2026-03-02
+
+### Changed
+
+* Converted to pure stateless request/response bridge.
+* Each message triggers exactly one LLM call with no history injected.
+* System prompt: "You are Agent Smith. Provide direct, concise answers."
+
+### Removed
+
+* Memory compaction system (`memory/compaction.py`).
+* Structured summarizer (`memory/summarizer.py`).
+* Message history buffers, rolling context, and reset markers.
+* Background compaction tasks and per-channel locks.
+* Message counters and threshold logic.
+* Auto-channel summary editing and Discord summary channel integration.
+* `/reset` slash command (no state to reset).
+* `/memory status` slash command.
+* All memory-related configuration settings.
+
 ## [0.0.4] — 2026-03-02
 
 ### Added

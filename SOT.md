@@ -99,3 +99,14 @@ The system uses tiered memory behavior while preserving fast-path semantics:
 - Implemented read-only memory introspection without introducing architectural behavior changes.
 - Preserved fast-path chat invariants and existing compaction/model invocation behavior.
 - Added non-blocking status file reads using threaded I/O boundaries.
+
+## SOT Delta — v0.0.8 Stateless Architecture Simplification
+
+- Converted to pure stateless request/response bridge. One message = one LLM inference. No state retained between messages.
+- Removed memory compaction system, structured summarizer, message history buffers, rolling context, and reset markers.
+- Removed background compaction tasks, per-channel locks, message counters, and threshold logic.
+- Removed Discord summary channel integration and auto-channel editing.
+- Removed `/reset` and `/memory status` slash commands.
+- Removed all memory-related configuration settings (`MAX_CONTEXT_PAIRS`, `MEMORY_*`).
+- Prompt format is now fixed: system = "You are Agent Smith. Provide direct, concise answers." + user message only.
+- Updated Product Invariants: fast-path chat invariant is now `User message → Ollama → streamed Discord response` with no history step.

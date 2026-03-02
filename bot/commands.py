@@ -7,6 +7,7 @@ Slash commands for the bot.
 /reset          — Clear the conversation history for the current channel
 /model [name]   — View or change the active Ollama model for this channel
 /models         — List all models available on the Ollama server
+/memory status  — Show per-channel memory diagnostics
 
 All commands respect the same channel/user permission rules as regular messages.
 """
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
 
 
 class SlashCog(commands.Cog):
+    memory_group = app_commands.Group(name="memory", description="Memory diagnostics")
+
     """Slash command group for Agent Smith."""
 
     def __init__(self, bot: commands.Bot, ollama: OllamaClient, chat_cog: "ChatCog") -> None:  # type: ignore[name-defined]  # noqa: F821
@@ -149,6 +152,33 @@ class SlashCog(commands.Cog):
         await interaction.response.send_message(
             f"✅ Switched to model **{name}** for this channel.", ephemeral=True
         )
+
+
+    @memory_group.command(name="status", description="Show memory status for this channel")
+    async def memory_status(self, interaction: discord.Interaction) -> None:
+        """Return read-only memory diagnostics for the current channel."""
+        if not self._check_permissions(interaction):
+            await interaction.response.send_message(
+                "❌ You don't have permission to use this command here.", ephemeral=True
+            )
+            return
+
+        channel_id = interaction.channel_id or 0
+        status = await self.chat_cog.compaction.get_status(channel_id)
+
+        text = (
+            f"**Memory Status — Channel {status['channel_id']}**\n\n"
+            f"Active RAM Messages: {status['active_ram_messages']}\n"
+            f"Max Context Pairs: {status['max_context_pairs']}\n"
+            f"Compaction Threshold: {status['compaction_threshold']}\n"
+            f"Compaction Size: {status['compaction_size']}\n"
+            f"Active Window Size: {status['active_window_size']}\n\n"
+            f"Archive Segments: {status['archive_segments']}\n"
+            f"Live Segments: {status['live_segments']}\n"
+            f"Last Compaction: {status['last_compaction']}\n\n"
+            f"Summary Channel ID: {status['summary_channel_id']}"
+        )
+        await interaction.response.send_message(text, ephemeral=True)
 
     # ── /models ───────────────────────────────────────────────────────────────
 

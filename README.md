@@ -40,7 +40,7 @@ cd Agent_Smith
 cp .env.example .env
 # Edit .env with your favourite editor and fill in:
 #   DISCORD_TOKEN — your bot token
-#   OLLAMA_MODEL  — e.g. llama3, mistral, phi3
+#   OLLAMA_MODEL  — e.g. tinyllama, llama3, mistral
 ```
 
 ### 3. Run with Python
@@ -86,13 +86,17 @@ All settings live in `.env` (copy from `.env.example`):
 | `DISCORD_TOKEN` | *(required)* | Discord bot token |
 | `COMMAND_PREFIX` | `!` | Prefix for legacy text commands |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | `llama3` | Default model name |
+| `OLLAMA_MODEL` | `tinyllama` | Default model name |
 | `OLLAMA_TIMEOUT` | `120` | Request timeout (seconds) |
 | `ALLOWED_CHANNEL_IDS` | *(empty = all)* | Comma-separated channel IDs |
 | `ALLOWED_USER_IDS` | *(empty = all)* | Comma-separated user IDs |
-| `RATE_LIMIT_REQUESTS` | `5` | Max requests per user per window |
-| `RATE_LIMIT_WINDOW` | `60` | Rate limit window (seconds) |
 | `MAX_CONTEXT_PAIRS` | `10` | Message pairs to keep in context |
+| `MEMORY_ACTIVE_WINDOW` | `20` | In-memory messages kept after compaction |
+| `MEMORY_COMPACT_THRESHOLD` | `40` | Trigger async compaction at this message count |
+| `MEMORY_COMPACT_SIZE` | `20` | Number of oldest messages to compact each run |
+| `MEMORY_SUMMARY_CHANNEL_ID` | `1478093415509131296` | Discord channel used for editable summary posts |
+| `MEMORY_SUMMARY_MAX_SEGMENTS` | `5` | Max retained structured summary segments per channel |
+| `MEMORY_SUMMARY_MODEL` | `tinyllama` | Ollama model used only for background summarization |
 | `LOG_LEVEL` | `INFO` | Logging verbosity |
 
 ---
@@ -137,7 +141,6 @@ Agent_Smith/
     ├── __init__.py
     ├── logger.py          # Structured logging
     ├── formatting.py      # Discord message splitting/truncation
-    └── rate_limiter.py    # Per-user sliding-window rate limiter
 ```
 
 ---

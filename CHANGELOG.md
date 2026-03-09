@@ -1,8 +1,92 @@
 # Changelog
 
+## [0.1.2] — 2026-03-09
+
+### Changed (Phase 4: Formatter-First Response Architecture)
+
+* **Response composition**: Final Discord responses are now assembled deterministically in Python instead of relying on model output. Internal Python code builds complete structured responses with title line, summary section, signals section, interpretation section, and optional limits. No raw model scaffolding leaks to operators.
+* **Model role narrowing**: Ollama is now limited to generating only a brief interpretation (1–3 sentences max, no bullets, no headings, no schema discussion). Model no longer generates summary, signals, or any structural content.
+* **Deterministic summary and signals**: Summary bullets and signal bullets are computed entirely in Python from preprocessed payload fields. These sections never depend on model output. Each route has its own `build_report_summary()`, `build_health_summary()`, `build_traffic_summary()`, `build_errors_summary()` (and corresponding `build_*_signals()` functions).
+* **Interpretation fallback enhanced**: Added route-specific interpretation fallback functions (`interpret_report_fallback()`, `interpret_health_fallback()`, `interpret_traffic_fallback()`, `interpret_errors_fallback()`) that generate 1–3 sentence operational interpretations using only preprocessed data. Used when model fails, times out, or output fails quality gates.
+* **Raw telemetry JSON removal**: Sanitized telemetry JSON is no longer sent to users in normal success responses. That data stays internal to preprocessing pipeline. Operators only see operator-facing summary, signals, and interpretation.
+* **Quality gate strengthening**: Model interpretation output is now validated for maximum 500 chars and explicitly rejects patterns like `section:`, `sanitized telemetry`, `route:`, and other internal scaffolding labels. Stronger rejection ensures clean operator experience.
+* **Output format simplification**: Final Discord format is now: `Route · HTTP status | Summary | Signals | Interpretation`. No extra narration, no duplicate sections, no filler.
+
+### Notes
+
+* Command surface unchanged: `/report`, `/traffic`, `/errors`, `/health` remain the only commands.
+* Security model fully intact: HTTPS enforcement, host allowlist, sanitization, and read-only design unchanged.
+* Backward compatible: Existing integrations and command invocations work without change.
+* Model is now optional enhancement, not required for correct operation.
+
+## [0.1.1] — 2026-03-09
+
+### Changed (Phase 3: Operator Output Quality)
+
+* **Telemetry preprocessing**: Added deterministic preprocessing layer (`services/telemetry_preprocess.py`) that transforms raw backend JSON into compact operator-facing payloads before any LLM processing. Route-specific preprocessing functions extract only relevant fields, normalize structures, and compute deterministic derived values (day-over-day deltas, availability checks, health signals) without inventing missing data.
+* **Model input narrowing**: Raw backend JSON is no longer sent directly to Ollama. The model now receives only compact, preprocessed operator summaries. This eliminates schema narration, generic language, and hallucination of non-existent fields.
+* **System prompt tightening**: Updated system prompt to explicitly require structured output format with exact sections (Summary, Signals, Interpretation, Limits) and strict prohibitions on schema description, field invention, and generic language.
+* **Response quality guardrails**: Added deterministic quality gate that rejects model outputs exceeding 2000 chars, containing banned phrases (schema narration, generic analytics language), or lacking required sections. Low-quality outputs trigger fallback.
+* **Fallback non-LLM formatting**: Added route-specific fallback formatters that produce concise, deterministic operator-readable output using only preprocessed data if Ollama fails, times out, or produces low-quality output. Backend success + model failure still yields useful analysis.
+* **Output format**: Responses now strictly structured with 2–4 bullet point summaries, 1–4 bullet point signals, max 3-sentence interpretation, and concise limits. Eliminated essay formatting, schema restating, and filler.
+
+### Notes
+
+* Command surface unchanged: `/report`, `/traffic`, `/errors`, `/health` remain the only commands.
+* Security model fully intact: HTTPS enforcement, host allowlist, sanitization, and read-only design unchanged.
+* Backward compatible: Existing integrations and command invocations work without change.
+
 ## [0.1.0] — 2026-03-09
 
 ### Changed (Phase 2: Telemetry Operator Bridge)
+
+* **Telemetry preprocessing**: Added deterministic preprocessing layer (`services/telemetry_preprocess.py`) that transforms raw backend JSON into compact operator-facing payloads before any LLM processing. Route-specific preprocessing functions extract only relevant fields, normalize structures, and compute deterministic derived values (day-over-day deltas, availability checks, health signals) without inventing missing data.
+* **Model input narrowing**: Raw backend JSON is no longer sent directly to Ollama. The model now receives only compact, preprocessed operator summaries. This eliminates schema narration, generic language, and hallucination of non-existent fields.
+* **System prompt tightening**: Updated system prompt to explicitly require structured output format with exact sections (Summary, Signals, Interpretation, Limits) and strict prohibitions on schema description, field invention, and generic language.
+* **Response quality guardrails**: Added deterministic quality gate that rejects model outputs exceeding 2000 chars, containing banned phrases (schema narration, generic analytics language), or lacking required sections. Low-quality outputs trigger fallback.
+* **Fallback non-LLM formatting**: Added route-specific fallback formatters that produce concise, deterministic operator-readable output using only preprocessed data if Ollama fails, times out, or produces low-quality output. Backend success + model failure still yields useful analysis.
+* **Output format**: Responses now strictly structured with 2–4 bullet point summaries, 1–4 bullet point signals, max 3-sentence interpretation, and concise limits. Eliminated essay formatting, schema restating, and filler.
+
+### Notes
+
+* Command surface unchanged: `/report`, `/traffic`, `/errors`, `/health` remain the only commands.
+* Security model fully intact: HTTPS enforcement, host allowlist, sanitization, and read-only design unchanged.
+* Backward compatible: Existing integrations and command invocations work without change.
+
+## [0.1.0] — 2026-03-09
+
+### Changed (Phase 2: Telemetry Operator Bridge)
+
+* **User-facing behavior**: Converted from stateless general-purpose chat bridge to narrow, read-only operator telemetry bridge.
+* **Command surface**: Removed `/ask`, `/model`, `/models`. Added fixed commands: `/report`, `/traffic`, `/errors`, `/health`.
+* **Freeform message handling**: Normal Discord messages no longer trigger LLM responses. Users are directed to use slash commands.
+* **Backend integration**: Introduced dedicated backend service layer (`services/backend_client.py`) for fixed-endpoint telemetry calls.
+* **Validation and sanitization**: All backend responses are validated and sanitized before LLM analysis (`services/telemetry_validation.py`).
+* **Security controls**:
+  - HTTPS enforcement for all backend URLs.
+  - Host allowlist validation (`BACKEND_ALLOWED_HOSTS`).
+  - Explicit request timeout (`BACKEND_TIMEOUT_SECONDS`).
+  - Payload size bounds (`BACKEND_MAX_RESPONSE_BYTES`).
+  - Sensitive key redaction before LLM (auth tokens, secrets, cookies).
+* **Configuration**: Added backend telemetry environment variables for endpoint URLs, timeouts, and auth. All backend URLs and tokens are environment-driven.
+* **Error handling**: Invalid backend responses fail clearly and concisely without LLM hallucination.
+* **Operator logging**: Added structured logging for operator actions (command invoked, user, channel, route, HTTP status, success/failure).
+* **Alert intake foundation**: Added minimal placeholder data shape for future structured alert intake (`services/alert_intake.py`); no webhook server yet.
+
+### Removed
+
+* Freeform chat bridge behavior from normal Discord messages.
+* `/ask` command (general-purpose prompt).
+* `/model` and `/models` commands (no longer needed for telemetry).
+* Per-channel model override logic.
+* System prompt for general chat assistance.
+
+### Notes
+
+* Agent Smith is now read-only; no write or mutation actions are exposed.
+* Arbitrary shell commands, arbitrary URLs, and autonomous tool selection are forbidden by architecture.
+* No conversation memory, no reset flow, no previous-message lookup.
+* Each operator command is stateless.
 
 * **User-facing behavior**: Converted from stateless general-purpose chat bridge to narrow, read-only operator telemetry bridge.
 * **Command surface**: Removed `/ask`, `/model`, `/models`. Added fixed commands: `/report`, `/traffic`, `/errors`, `/health`.

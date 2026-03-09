@@ -12,17 +12,43 @@ from config.settings import settings
 from ollama.client import OllamaClient, OllamaError
 from services.backend_client import BackendClient
 from services.telemetry_validation import validate_and_sanitize
+from services.telemetry_preprocess import ROUTE_HANDLERS
 from utils.formatting import split_message
 from utils.logger import get_logger
 
 log = get_logger(__name__)
 
-_TELEMETRY_SYSTEM_PROMPT = (
-    "You are Agent Smith, a strict telemetry analyst. Treat input as operational "
-    "telemetry only. Be concise. Summarize only what is present. Identify anomalies, "
-    "trends, and limits. Do not invent missing data. Do not imply prior context. "
-    "Do not behave conversationally."
+# System prompt: model should only generate brief interpretation and optional limits.
+# No sections, no bullet points, no scaffolding.
+_INTERPRETATION_SYSTEM_PROMPT = (
+    "You are an operator briefing system. "
+    "Given preprocessed telemetry data, provide a brief interpretation "
+    "(1–3 sentences max). "
+    "If data is incomplete or ambiguous, note that in 1 sentence max. "
+    "Do NOT include section headings, bullet points, or schema discussion. "
+    "Speak directly to what the data means operationally."
 )
+
+# Quality gate: stronger rejection of model output with internal scaffolding
+_BANNED_PATTERNS = {
+    "section:",
+    "sanitized telemetry",
+    "route:",
+    "summary:",
+    "signals:",
+    "limits:",
+    "interpretation:",
+    "telemetry analyzed includes",
+    "convergence ratio",
+    "data structure includes",
+    "payload contains",
+    "schema",
+    "the following fields",
+    "let me analyze",
+    "based on the provided",
+    "here's",
+    "here are",
+}
 
 
 class SlashCog(commands.Cog):
@@ -39,6 +65,99 @@ class SlashCog(commands.Cog):
         if not is_user_allowed(interaction.user):  # type: ignore[arg-type]
             return False
         return True
+
+    def _quality_gate_interpretation(self, output: str) -> bool:
+        """
+        Validate model interpretation output.
+        Reject if it contains internal scaffolding or is too long.
+        """
+        # Max reasonable interpretation is ~500 chars (Discord allows 2000)
+        if len(output) > 500:
+            log.warning("quality_gate interpretation_too_long length=%d", len(output))
+            return False
+
+        output_lower = output.lower()
+
+        # Reject if contains banned patterns (especially internal scaffolding)
+        for pattern in _BANNED_PATTERNS:
+            if pattern in output_lower:
+                log.warning("quality_gate banned_pattern detected=%s", pattern)
+                return False
+
+        # Must have some content
+        if not output.strip():
+            log.warning("quality_gate interpretation_empty")
+            return False
+
+        return True
+
+    def _build_response(
+        self,
+        route_label: str,
+        status_code: int | None,
+        preprocessed: dict,
+        interpretation: str | None = None,
+    ) -> str:
+        """
+        Build final Discord response in Python (formatter-first).
+        
+        Structure:
+        - Title line with route and status
+        - Summary section (deterministic)
+        - Signals section (deterministic, optional)
+        - Interpretation section (model-generated or fallback)
+        - Limits section (if data is thin, optional)
+        """
+        lines = []
+
+        # Title line: Route and HTTP status
+        status_str = f"HTTP {status_code}" if status_code else "HTTP unknown"
+        lines.append(f"{route_label.capitalize()} · {status_str}")
+        lines.append("")
+
+        # Get route handlers
+        handlers = ROUTE_HANDLERS.get(route_label)
+        if not handlers:
+            return "\n".join(lines) + "Unknown route."
+
+        # Build Summary section (fully deterministic)
+        summary_bullets = handlers["builder_summary"](preprocessed)
+        if summary_bullets:
+            lines.append("**Summary**")
+            for bullet in summary_bullets:
+                lines.append(f"· {bullet}")
+            lines.append("")
+
+        # Build Signals section (fully deterministic)
+        signal_bullets = handlers["builder_signals"](preprocessed)
+        if signal_bullets:
+            lines.append("**Signals**")
+            for bullet in signal_bullets:
+                lines.append(f"· {bullet}")
+            lines.append("")
+
+        # Interpretation section: use model output if good, otherwise fallback
+        use_fallback_interpretation = True
+        if interpretation and self._quality_gate_interpretation(interpretation):
+            use_fallback_interpretation = False
+            lines.append("**Interpretation**")
+            lines.append(interpretation.strip())
+            lines.append("")
+        else:
+            # Use deterministic fallback
+            fallback = handlers["interpret_fallback"](preprocessed)
+            lines.append("**Interpretation**")
+            lines.append(fallback)
+            lines.append("")
+
+        if use_fallback_interpretation:
+            log.info("interpretation_fallback_used route=%s", route_label)
+
+        # Note: Limits section is omitted unless explicitly returned by model.
+        # We only show limits if data is known to be thin, but Summary and Signals
+        # already indicate that through their content.
+
+        return "\n".join(lines).strip()
 
     async def _run_telemetry_command(
         self,
@@ -77,6 +196,7 @@ class SlashCog(commands.Cog):
         status_code = result.get("status_code")
         parse_state = "ok" if validation.get("parse_ok") else "failed"
 
+        # If backend retrieval failed, report clearly and return
         if not validation.get("ok"):
             log.warning(
                 "operator_action_failed command=%s user_id=%s route=%s status=%s error=%s",
@@ -98,47 +218,71 @@ class SlashCog(commands.Cog):
             )
             return
 
+        # === DETERMINISTIC PREPROCESSING ===
         sanitized_payload = validation["sanitized_json"]
-        telemetry_json = json.dumps(sanitized_payload, indent=2, sort_keys=True)
-        analysis_prompt = (
-            "Analyze this telemetry and output exactly these sections:\n"
-            "Summary\n"
-            "Notable signals\n"
-            "Likely interpretation\n"
-            "Confidence / limits\n\n"
-            f"Route: {route_label}\n"
-            f"HTTP status: {status_code}\n"
-            "Sanitized telemetry JSON:\n"
-            f"{telemetry_json}"
+        handlers = ROUTE_HANDLERS.get(route_label)
+        if not handlers:
+            log.error("Unknown route: %s", route_label)
+            await interaction.followup.send("Unknown route.")
+            return
+
+        preprocessed = handlers["preprocess"](sanitized_payload)
+        log.debug(
+            "preprocessing_complete route=%s preprocessed_keys=%s",
+            route_label,
+            list(preprocessed.keys()),
+        )
+
+        # === OPTIONAL MODEL CALL FOR INTERPRETATION ONLY ===
+        # Model receives compact preprocessed payload, asked to generate
+        # only interpretation (1–3 sentences max), no sections/bullets.
+        interpretation = None
+        use_fallback = False
+
+        preprocessed_json = json.dumps(preprocessed, indent=2, sort_keys=True)
+        interpretation_prompt = (
+            f"Preprocessed telemetry ({route_label}):\n"
+            f"{preprocessed_json}\n\n"
+            "Provide a 1–3 sentence interpretation of this data. "
+            "No headings, no bullets, no schema discussion."
         )
 
         messages = [
-            {"role": "system", "content": _TELEMETRY_SYSTEM_PROMPT},
-            {"role": "user", "content": analysis_prompt},
+            {"role": "system", "content": _INTERPRETATION_SYSTEM_PROMPT},
+            {"role": "user", "content": interpretation_prompt},
         ]
 
         try:
-            analysis = await self.ollama.chat(messages, model=settings.OLLAMA_MODEL)
-        except OllamaError as exc:
-            log.error(
-                "operator_action_analysis_error command=%s user_id=%s route=%s status=%s error=%s",
-                command_name,
-                user_id,
+            interpretation = await self.ollama.chat(messages, model=settings.OLLAMA_MODEL)
+            log.debug(
+                "ollama_interpretation_received route=%s output_len=%d",
                 route_label,
-                status_code,
+                len(interpretation),
+            )
+        except OllamaError as exc:
+            log.warning(
+                "ollama_error route=%s error=%s",
+                route_label,
                 exc,
             )
-            await interaction.followup.send(
-                "\n".join(
-                    [
-                        f"Route: {route_label}",
-                        f"HTTP status: {status_code if status_code is not None else 'unknown'}",
-                        "JSON parse: ok",
-                        f"Result: backend retrieval succeeded, analysis unavailable ({exc})",
-                    ]
+            use_fallback = True
+
+        # === QUALITY GATE: REJECT IF SCAFFOLDING LEAKED ===
+        if interpretation and not use_fallback:
+            if not self._quality_gate_interpretation(interpretation):
+                log.warning(
+                    "quality_gate_interpretation_rejected route=%s",
+                    route_label,
                 )
-            )
-            return
+                use_fallback = True
+
+        # === BUILD FINAL RESPONSE IN PYTHON ===
+        # Summary and Signals are 100% deterministic.
+        # Interpretation is model-generated if available, else fallback.
+        # No raw JSON shown.
+        reply = self._build_response(
+            route_label, status_code, preprocessed, interpretation
+        )
 
         log.info(
             "operator_action_success command=%s user_id=%s route=%s status=%s",
@@ -148,20 +292,12 @@ class SlashCog(commands.Cog):
             status_code,
         )
 
-        reply = "\n".join(
-            [
-                f"Route: {route_label}",
-                f"HTTP status: {status_code if status_code is not None else 'unknown'}",
-                "JSON parse: ok",
-                "",
-                analysis.strip() or "No analysis generated.",
-            ]
-        )
-
         chunks = split_message(reply)
         await interaction.followup.send(chunks[0])
         for chunk in chunks[1:]:
             await interaction.channel.send(chunk)  # type: ignore[union-attr]
+
+
 
     @app_commands.command(name="report", description="Fetch and analyze telemetry report")
     async def report(self, interaction: discord.Interaction) -> None:

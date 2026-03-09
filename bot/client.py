@@ -1,14 +1,4 @@
-"""
-bot/client.py
-=============
-Assembles the Discord bot client.
-
-Responsibilities:
-- Create the discord.py Bot instance with the configured command prefix and intents.
-- Register all Cogs (ChatCog for on_message, SlashCog for slash commands).
-- Sync the slash-command tree on startup.
-- Log connection events and set the bot's status.
-"""
+"""Assemble the Discord bot with slash-only telemetry commands."""
 from __future__ import annotations
 
 import discord
@@ -37,14 +27,13 @@ def create_bot(ollama: OllamaClient) -> commands.Bot:
     bot = commands.Bot(
         command_prefix=settings.COMMAND_PREFIX,
         intents=intents,
-        # Disable the default help command so our /ask help-text is the guide
+        # Prefix commands are disabled; slash commands are the full interface.
         help_command=None,
     )
 
     # ── Attach Cogs ───────────────────────────────────────────────────────────
 
-    # Order matters: ChatCog must be added first so SlashCog can reference it
-    chat_cog = ChatCog(bot, ollama)
+    chat_cog = ChatCog(bot)
     slash_cog = SlashCog(bot, ollama)
 
     # ── Events ────────────────────────────────────────────────────────────────
@@ -57,7 +46,7 @@ def create_bot(ollama: OllamaClient) -> commands.Bot:
         await bot.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.listening,
-                name="your questions (/ask)",
+                name="operator telemetry (/report /traffic /errors /health)",
             )
         )
 

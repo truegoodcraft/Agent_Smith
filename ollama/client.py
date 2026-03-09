@@ -23,7 +23,7 @@ from utils.logger import get_logger
 log = get_logger(__name__)
 
 # Type alias for a single chat message (Ollama chat API format)
-Message = dict  # {"role": "user"|"assistant"|"system", "content": str}
+Message = dict[str, str]  # {"role": "user"|"assistant"|"system", "content": str}
 
 
 class OllamaError(Exception):

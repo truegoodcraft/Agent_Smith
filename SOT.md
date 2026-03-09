@@ -1,103 +1,172 @@
-# Statement of Truth (SoT)
+# Statement of Truth (SoT) — Agent Smith
 
-## Mission
+**Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-Agent Smith is a Discord-based assistant bridge to Ollama focused on reliable, low-latency conversational operation, clear operational controls, and deterministic behavior under bounded in-memory context.
+## Current Mission (v0.1.0+)
 
-## Product Invariants
+Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed, read-only backend telemetry. It retrieves and analyzes operational metrics from pre-approved backend sources using strict validation and security controls.
 
-1. **Fast-path chat invariant**
-   - The default path remains: `User message -> channel RAM history -> Ollama -> streamed Discord response`.
-   - Streaming latency and token flow must not be blocked by non-essential background work.
+## Core Invariants
 
-2. **Prompt grounding invariant**
-   - The model only receives context explicitly assembled from the channel buffer and system instructions.
-   - No hidden memory injection occurs unless explicitly designed and documented as part of architecture governance.
+1. **Stateless invariant**
+   - Each operator command is independent and carries no conversation state.
+   - No message history, no reset flow, no previous-message lookup.
+   - Each `/report`, `/traffic`, `/errors`, `/health` call is a fresh backend request and analysis cycle.
 
-3. **Bounded context invariant**
-   - Per-channel prompt context is bounded by `MAX_CONTEXT_PAIRS` (`2 * pairs` messages maximum).
-   - History trimming must be deterministic and consistently applied to both user and assistant appends on the fast path.
+2. **Read-only invariant**
+   - Agent Smith only retrieves and analyzes telemetry. It does not mutate backend state.
+   - No write, delete, or configuration-change actions are exposed.
+   - No arbitrary command execution is permitted.
 
-4. **Operational safety invariant**
-   - Configuration is environment-driven via `config/settings.py` and `.env` defaults.
-   - Runtime permissions are enforced via allow-lists for channels/users when configured.
+3. **Fixed-endpoint invariant**
+   - The four slash commands call exactly four fixed backend routes, configured via environment variables.
+   - Routes cannot be dynamically specified by users.
+   - Each route is validated for HTTPS, whitelisted host, and proper JSON response.
 
-## Architecture Overview
+4. **Validation-before-analysis invariant**
+   - Backend responses are validated (HTTP status, content type, JSON parse, payload size) before any LLM usage.
+   - Invalid responses fail clearly with a concise human-readable error, not LLM hallucination.
+   - Sensitive fields (tokens, secrets, auth headers, cookies) are redacted before LLM sees the data.
 
-### Runtime Components
+5. **Security invariant**
+   - All backend URLs must be HTTPS.
+   - All backend hosts must be in `BACKEND_ALLOWED_HOSTS` allowlist.
+   - All requests use explicit timeout (`BACKEND_TIMEOUT_SECONDS`).
+   - Payloads are bounded (`BACKEND_MAX_RESPONSE_BYTES`).
+   - Auth tokens are environment-configured, never hardcoded or user-supplied.
 
-- `bot/events.py`
-  - Handles incoming Discord messages and orchestrates fast-path streaming.
-  - Maintains per-channel RAM history and reset markers.
+6. **Freeform-message prohibition invariant**
+   - Normal Discord messages do not trigger AI chat responses.
+   - If received, normal messages get a brief redirect to slash commands.
+   - No LLM-chat path exists for freeform text.
 
-- `ollama/client.py`
-  - Wraps async calls to Ollama APIs for streaming and non-streaming chat.
+## Operator Surface
 
-- `bot/commands.py`
-  - Provides slash command controls (`/ask`, `/reset`, `/model`, `/models`).
+Exactly four slash commands:
 
-- `config/settings.py`
-  - Centralized configuration defaults and environment loading.
+| Command | Backend Route | Purpose |
+|---------|---------------|----------|
+| `/report` | `LIGHTHOUSE_REPORT_URL` | Fetch and analyze telemetry report |
+| `/traffic` | `LIGHTHOUSE_TRAFFIC_URL` | Fetch and analyze traffic telemetry |
+| `/errors` | `LIGHTHOUSE_ERRORS_URL` | Fetch and analyze error telemetry |
+| `/health` | `LIGHTHOUSE_HEALTH_URL` | Fetch and analyze health telemetry |
 
-### Memory Architecture
+All commands:
+- Respect Discord channel/user allow-lists (`ALLOWED_CHANNEL_IDS`, `ALLOWED_USER_IDS`).
+- Are subject to rate limiting (`RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW`).
+- Log operator actions with user ID, channel ID, command, route label, and HTTP status.
 
-The system uses tiered memory behavior while preserving fast-path semantics:
+## Backend Integration Architecture
 
-1. **Active RAM tier**
-   - Immediate channel context used for prompt assembly.
-   - Bounded for prompt safety and deterministic behavior.
+### `services/backend_client.py`
+- Read-only async HTTP client for approved telemetry endpoints.
+- Enforces HTTPS, host allowlist, request timeout, payload size bounds.
+- Returns normalized result structure:
+  ```python
+  {
+    "ok": bool,
+    "status_code": int | None,
+    "url": str,
+    "error": str | None,
+    "json": dict | None,
+    "raw_text": str | None,
+    "content_type": str | None,
+  }
+  ```
 
-2. **Background compaction tier**
-   - Triggered asynchronously at configured thresholds.
-   - Produces structured summary segments and raw dropped logs without blocking chat streaming.
+### `services/telemetry_validation.py`
+- Validates HTTP status, content type (must contain `application/json`), JSON parse success, payload size.
+- Redacts sensitive keys: `authorization`, `token`, `access_token`, `api_key`, `secret`, `password`, `cookie`, `set-cookie`.
+- Returns validation result and sanitized JSON (or error description).
 
-3. **Visibility tier**
-   - Discord summary channel reflects compacted structured memory via single-message edit-in-place behavior per source channel.
+### `services/alert_intake.py`
+- Minimal placeholder data shape for future backend-originated alert intake.
+- No webhook server or runtime intake is currently implemented.
 
-## Governance Rules
+## Operator Workflow
 
-1. **Append-only governance records**
-   - `CHANGELOG.md` is append-only per release entry.
-   - SoT architectural changes are recorded as append-only `SOT Delta` sections.
+1. User invokes slash command (e.g., `/report`).
+2. Permission check (channel/user allow-lists).
+3. Rate-limit check.
+4. Backend call via `BackendClient.get_<route>()`.
+5. Response validation via `validate_and_sanitize()`.
+6. If valid:
+   - Construct telemetry JSON summary.
+   - Send to Ollama with strict telemetry-analysis system prompt.
+   - Return analysis (summary, notable signals, interpretation, confidence limits).
+7. If invalid:
+   - Return concise failure report (route, HTTP status, parse state, exact error).
+   - No speculative analysis.
 
-2. **Version discipline**
-   - `VERSION` follows patch increments for corrective and additive changes unless otherwise specified.
+## Configuration Requirements
 
-3. **No hidden architectural drift**
-   - Changes that alter invariants must be explicitly documented in both changelog and SoT delta entries.
+All backend URLs and auth are environment-configured:
 
-4. **No unrelated refactors in corrective patches**
-   - Corrective versions should target stated regressions only.
+- `LIGHTHOUSE_REPORT_URL` (required, must be HTTPS)
+- `LIGHTHOUSE_TRAFFIC_URL` (required, must be HTTPS)
+- `LIGHTHOUSE_ERRORS_URL` (required, must be HTTPS)
+- `LIGHTHOUSE_HEALTH_URL` (required, must be HTTPS)
+- `LIGHTHOUSE_ADMIN_TOKEN` (required)
+- `BACKEND_ALLOWED_HOSTS` (required, comma-separated hostnames, empty = reject all)
+- `BACKEND_TIMEOUT_SECONDS` (default 10)
+- `BACKEND_MAX_RESPONSE_BYTES` (default 200000)
+- `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT` (for LLM analysis)
+- `ALLOWED_CHANNEL_IDS`, `ALLOWED_USER_IDS` (optional, empty = allow all)
+- `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW` (optional rate limiting)
 
-## Configuration Baseline
+Missing required env vars cause startup failure.
 
-- Default model target: `tinyllama`.
-- Memory compaction defaults are environment configurable and must preserve non-blocking operation for chat streaming.
+## Goalsand Non-Goals
 
-## SoT Deltas
+### Goals
+- Provide operators a trusted, auditable interface to backend telemetry.
+- Enforce security by architecture (HTTPS, allowlist, validation, redaction).
+- Fail safely and clearly when backend response is invalid.
+- Log all operator actions for audit trail.
+- Use LLM only after successful validation to generate concise operator-focused analysis.
 
-## SOT Delta — Background Memory Compaction + Structured Mid-Term Memory
+### Non-Goals
+- General-purpose chat assistance.
+- Arbitrary command execution (shell, HTTP, etc.).
+- Autonomous tool selection.
+- Conversation history or state.
+- User-supplied backend URLs or dynamic routing.
+- Write or mutation actions.
 
-- Introduced a 3-tier memory model: short-term active RAM window, mid-term structured summaries, and raw dropped transcript archives.
-- Added asynchronous per-channel compaction triggered at a configurable threshold and executed via background tasks with per-channel locks.
-- Added append-only structured summary segment files with strict section schema (FACTS, THREADS, DECISIONS, IDEAS, OPEN_LOOPS).
-- Enforced bounded RAM by removing compacted messages and preserving only the configured active window after compaction.
-- Added Discord summary channel visibility through single-message per-channel summary upsert (create+pin once, then edit in place).
-- Preserved chat-path invariants by keeping default chat flow unchanged and avoiding automatic summary prompt injection.
+## Known Limitations and Unresolved Assumptions
 
-## SOT Delta — v0.0.5 Governance and Performance Corrections
+1. **Auth header format**: Currently sends both `Authorization: Bearer <token>` and `X-Admin-Token: <token>`. Confirm which header(s) your backend expects.
+2. **Endpoint paths**: `LIGHTHOUSE_*_URL` values are examples. Confirm actual backend endpoint paths before production deployment.
+3. **Response structure**: Assumes backend returns JSON objects (not root arrays). Root arrays are wrapped as `{"data": [...]}`.
+4. **Token auth refresh**: No automatic token refresh or multi-credential support.
+5. **Alert intake**: Placeholder only; no webhook server, no background processing.
 
-- Removed rate-limiting behavior from chat handling to restore prior runtime interaction invariants.
-- Updated versioning and changelog flow as append/update operations without historical rewrite.
-- Moved compaction file reads/writes onto threaded I/O boundaries to avoid event-loop blocking during background tasks.
-- Split structured summary persistence into append-only archive files (`channel_<id>_archive.md`) and bounded live-view files (`channel_<id>_live.md`).
-- Kept Discord summary updates sourced from live-view files while preserving full append-only archival segments.
+## Architectural Constraints
 
-## SOT Delta — Observability Layer — Memory Dashboard
+- **No message-history storage**: Each operator command is independent.
+- **No prompt injection surface**: Backend data is always validated and redacted before reaching Ollama.
+- **No background processing**: All operations are synchronous slash-command request → response cycles.
+- **No access to other Discord features**: Agent Smith is read-only Discord message monitoring + slash command responder.
 
-- Added a diagnostic `/memory status` slash command for per-channel memory observability.
-- Implemented read-only memory introspection without introducing architectural behavior changes.
-- Preserved fast-path chat invariants and existing compaction/model invocation behavior.
+---
+
+## SoT Deltas (Historical Reference Only)
+
+### SOT Delta — v0.1.0 Phase 2 Telemetry Operator Bridge
+
+- Replaced general-purpose chat bridge with narrow, fixed-endpoint telemetry operator bridge.
+- Removed freeform message handling; normal messages now redirect to slash commands.
+- Replaced dynamic `/ask` with four fixed commands: `/report`, `/traffic`, `/errors`, `/health`.
+- Introduced `services/backend_client.py` for fixed-endpoint, HTTPS-enforced, host-allowlisted telemetry calls.
+- Introduced `services/telemetry_validation.py` for response validation and sensitive-key redaction.
+- Added `services/alert_intake.py` as minimal placeholder foundation for future alert intake.
+- All backend URLs and tokens are environment-configured; no user-supplied routing.
+- Operator actions are logged with structured metadata (user, channel, command, route, HTTP status).
+- Invalid backend responses fail clearly without hallucination.
+
+### Original Historical Deltas
+
+(See archived CHANGELOG.md entries for v0.0.4, v0.0.5, v0.0.8 detailed memory and compaction architecture. These are superseded by v0.1.0 stateless telemetry model.)
 - Added non-blocking status file reads using threaded I/O boundaries.
 
 ## SOT Delta — v0.0.8 Stateless Architecture Simplification

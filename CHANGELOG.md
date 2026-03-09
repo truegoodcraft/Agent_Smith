@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.1.0] — 2026-03-09
+
+### Changed (Phase 2: Telemetry Operator Bridge)
+
+* **User-facing behavior**: Converted from stateless general-purpose chat bridge to narrow, read-only operator telemetry bridge.
+* **Command surface**: Removed `/ask`, `/model`, `/models`. Added fixed commands: `/report`, `/traffic`, `/errors`, `/health`.
+* **Freeform message handling**: Normal Discord messages no longer trigger LLM responses. Users are directed to use slash commands.
+* **Backend integration**: Introduced dedicated backend service layer (`services/backend_client.py`) for fixed-endpoint telemetry calls.
+* **Validation and sanitization**: All backend responses are validated and sanitized before LLM analysis (`services/telemetry_validation.py`).
+* **Security controls**:
+  - HTTPS enforcement for all backend URLs.
+  - Host allowlist validation (`BACKEND_ALLOWED_HOSTS`).
+  - Explicit request timeout (`BACKEND_TIMEOUT_SECONDS`).
+  - Payload size bounds (`BACKEND_MAX_RESPONSE_BYTES`).
+  - Sensitive key redaction before LLM (auth tokens, secrets, cookies).
+* **Configuration**: Added backend telemetry environment variables for endpoint URLs, timeouts, and auth. All backend URLs and tokens are environment-driven.
+* **Error handling**: Invalid backend responses fail clearly and concisely without LLM hallucination.
+* **Operator logging**: Added structured logging for operator actions (command invoked, user, channel, route, HTTP status, success/failure).
+* **Alert intake foundation**: Added minimal placeholder data shape for future structured alert intake (`services/alert_intake.py`); no webhook server yet.
+
+### Removed
+
+* Freeform chat bridge behavior from normal Discord messages.
+* `/ask` command (general-purpose prompt).
+* `/model` and `/models` commands (no longer needed for telemetry).
+* Per-channel model override logic.
+* System prompt for general chat assistance.
+
+### Notes
+
+* Agent Smith is now read-only; no write or mutation actions are exposed.
+* Arbitrary shell commands, arbitrary URLs, and autonomous tool selection are forbidden by architecture.
+* No conversation memory, no reset flow, no previous-message lookup.
+* Each operator command is stateless.
+
 ## [0.0.8] — 2026-03-02
 
 ### Changed

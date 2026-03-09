@@ -1,158 +1,100 @@
-# Agent Smith — Ollama Discord Bot Bridge
+# Agent Smith - Stateless Operator Telemetry Bridge
 
-Connect a local or remote [Ollama](https://ollama.com/) instance to a Discord bot so you can chat with your LLMs from anywhere.
+Agent Smith is a narrow, read-only Discord operator bridge for backend telemetry.
 
----
+Each interaction is stateless. There is no conversation history, no reset flow, and no previous-message lookup.
 
-## Features
+## Scope
 
-| Feature | Details |
+- Slash-command-driven only
+- Fixed, pre-approved backend telemetry routes
+- Read-only backend access
+- Optional LLM analysis after strict validation and sanitization
+
+## Non-Goals
+
+- No general chat assistant behavior
+- No arbitrary shell command execution
+- No arbitrary URL fetching
+- No write or mutation actions
+- No autonomous tool selection
+
+## Supported Commands
+
+| Command | Backend Route |
 |---|---|
-| **Multi-turn context** | Per-channel conversation history (configurable depth) |
-| **Streaming responses** | Live "typing" effect as the model generates tokens |
-| **Slash commands** | `/ask`, `/reset`, `/model`, `/models` |
-| **Permission control** | Allow-list specific channels and/or users |
-| **Rate limiting** | Configurable per-user request cap |
-| **Docker Compose** | One command to run Ollama + bot together |
+| `/report` | `LIGHTHOUSE_REPORT_URL` |
+| `/traffic` | `LIGHTHOUSE_TRAFFIC_URL` |
+| `/errors` | `LIGHTHOUSE_ERRORS_URL` |
+| `/health` | `LIGHTHOUSE_HEALTH_URL` |
 
----
+Normal Discord messages do not trigger telemetry analysis. Users are instructed to use slash commands.
 
-## Prerequisites
+## Security and Validation Controls
 
-- Python 3.11+ **or** Docker & Docker Compose
-- A [Discord application & bot token](https://discord.com/developers/applications)
-- An [Ollama](https://ollama.com/) server with at least one model pulled
+For every operator command:
 
----
+1. Exactly one fixed endpoint is called.
+2. URL and auth token come from environment configuration.
+3. Endpoint URL must be HTTPS.
+4. Endpoint host must be in `BACKEND_ALLOWED_HOSTS`.
+5. HTTP request uses explicit timeout.
+6. Response payload is size-bounded.
+7. Response must be parseable JSON with expected content type.
+8. Sensitive fields are redacted before LLM analysis.
+9. Invalid responses fail clearly without hallucinated analysis.
 
-## Quick Start
+## Required Environment Variables
 
-### 1. Clone the repo
+Copy `.env.example` to `.env` and set values:
 
-```bash
-git clone https://github.com/truegoodcraft/Agent_Smith.git
-cd Agent_Smith
-```
+- `DISCORD_TOKEN`
+- `COMMAND_PREFIX`
+- `OLLAMA_HOST`
+- `OLLAMA_MODEL`
+- `OLLAMA_TIMEOUT`
+- `ALLOWED_CHANNEL_IDS`
+- `ALLOWED_USER_IDS`
+- `RATE_LIMIT_REQUESTS`
+- `RATE_LIMIT_WINDOW`
+- `BACKEND_ALLOWED_HOSTS`
+- `BACKEND_TIMEOUT_SECONDS`
+- `BACKEND_MAX_RESPONSE_BYTES`
+- `LIGHTHOUSE_REPORT_URL`
+- `LIGHTHOUSE_TRAFFIC_URL`
+- `LIGHTHOUSE_ERRORS_URL`
+- `LIGHTHOUSE_HEALTH_URL`
+- `LIGHTHOUSE_ADMIN_TOKEN`
+- `LOG_LEVEL`
 
-### 2. Configure environment variables
-
-```bash
-cp .env.example .env
-# Edit .env with your favourite editor and fill in:
-#   DISCORD_TOKEN — your bot token
-#   OLLAMA_MODEL  — e.g. tinyllama, llama3, mistral
-```
-
-### 3. Run with Python
+## Run
 
 ```bash
 pip install -r requirements.txt
 python main.py
 ```
 
-### 4. Run with Docker Compose (Ollama included)
+## Operator Output Shape
 
-```bash
-# Start Ollama + bot in the background
-docker compose up -d
+On success, output includes:
 
-# Pull a model into the running Ollama container
-docker compose exec ollama ollama pull llama3
+- Route label
+- HTTP status
+- JSON parse state
+- Concise analysis sections:
+  - Summary
+  - Notable signals
+  - Likely interpretation
+  - Confidence / limits
 
-# View bot logs
-docker compose logs -f bot
-```
+On failure, output includes:
 
----
+- Route label
+- HTTP status (if available)
+- JSON parse state
+- Clear failure reason
 
-## Discord Developer Portal Setup
+## Notes
 
-1. Go to [discord.com/developers/applications](https://discord.com/developers/applications) and create a new application.
-2. Under **Bot**, create a bot user and copy the token into `DISCORD_TOKEN`.
-3. Under **Bot → Privileged Gateway Intents**, enable **Message Content Intent**.
-4. Under **OAuth2 → URL Generator**, select:
-   - Scope: `bot`, `applications.commands`
-   - Bot Permissions: `Send Messages`, `Read Message History`, `Use Slash Commands`
-5. Use the generated URL to invite the bot to your server.
-
----
-
-## Configuration Reference
-
-All settings live in `.env` (copy from `.env.example`):
-
-| Variable | Default | Description |
-|---|---|---|
-| `DISCORD_TOKEN` | *(required)* | Discord bot token |
-| `COMMAND_PREFIX` | `!` | Prefix for legacy text commands |
-| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | `tinyllama` | Default model name |
-| `OLLAMA_TIMEOUT` | `120` | Request timeout (seconds) |
-| `ALLOWED_CHANNEL_IDS` | *(empty = all)* | Comma-separated channel IDs |
-| `ALLOWED_USER_IDS` | *(empty = all)* | Comma-separated user IDs |
-| `MAX_CONTEXT_PAIRS` | `10` | Message pairs to keep in context |
-| `MEMORY_ACTIVE_WINDOW` | `20` | In-memory messages kept after compaction |
-| `MEMORY_COMPACT_THRESHOLD` | `40` | Trigger async compaction at this message count |
-| `MEMORY_COMPACT_SIZE` | `20` | Number of oldest messages to compact each run |
-| `MEMORY_SUMMARY_CHANNEL_ID` | `1478093415509131296` | Discord channel used for editable summary posts |
-| `MEMORY_SUMMARY_MAX_SEGMENTS` | `5` | Max retained structured summary segments per channel |
-| `MEMORY_SUMMARY_MODEL` | `tinyllama` | Ollama model used only for background summarization |
-| `LOG_LEVEL` | `INFO` | Logging verbosity |
-
----
-
-## Slash Commands
-
-| Command | Description |
-|---|---|
-| `/ask <prompt>` | One-shot question (doesn't affect channel context) |
-| `/reset` | Clear conversation history for the current channel |
-| `/model [name]` | View or change the active model for this channel |
-| `/models` | List all models available on the Ollama server |
-
----
-
-## Project Structure
-
-```
-Agent_Smith/
-├── main.py               # Entry point
-├── requirements.txt
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-│
-├── config/
-│   ├── __init__.py
-│   └── settings.py       # Load & expose all env-var config
-│
-├── ollama/
-│   ├── __init__.py
-│   └── client.py         # Async Ollama API wrapper (streaming)
-│
-├── bot/
-│   ├── __init__.py
-│   ├── client.py         # Assemble the Discord bot
-│   ├── events.py         # on_message handler + context management
-│   ├── commands.py       # Slash commands
-│   └── permissions.py    # Channel/user allow-list checks
-│
-└── utils/
-    ├── __init__.py
-    ├── logger.py          # Structured logging
-    ├── formatting.py      # Discord message splitting/truncation
-```
-
----
-
-## Security Notes
-
-- **Never commit your `.env` file** — it contains your Discord token. It is already listed in `.gitignore`.
-- `ALLOWED_CHANNEL_IDS` and `ALLOWED_USER_IDS` give you fine-grained control over who can interact with the bot.
-- The Ollama API endpoint is not exposed publicly when running via Docker Compose (only the bot container can reach it).
-
----
-
-## License
-
-MIT
+- This product is intentionally explicit and auditable.
+- Keep endpoint and token management in environment config only.

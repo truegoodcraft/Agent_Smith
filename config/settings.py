@@ -57,9 +57,35 @@ class Settings:
     # Empty = all users are allowed.
     ALLOWED_USER_IDS: Set[str] = _get_set("ALLOWED_USER_IDS")
 
+    # ── Rate limiting ───────────────────────────────────────────────────────
+    # Requests allowed per user within RATE_LIMIT_WINDOW seconds.
+    RATE_LIMIT_REQUESTS: int = int(_get("RATE_LIMIT_REQUESTS", "5"))  # type: ignore[arg-type]
+    RATE_LIMIT_WINDOW: int = int(_get("RATE_LIMIT_WINDOW", "60"))  # type: ignore[arg-type]
+
+    # ── Backend telemetry bridge ────────────────────────────────────────────
+    BACKEND_ALLOWED_HOSTS: Set[str] = _get_set(
+        "BACKEND_ALLOWED_HOSTS",
+        _get("BACKEND_ALLOWED_HOSTS", required=True) or "",
+    )
+    BACKEND_TIMEOUT_SECONDS: int = int(
+        _get("BACKEND_TIMEOUT_SECONDS", "10")
+    )  # type: ignore[arg-type]
+    BACKEND_MAX_RESPONSE_BYTES: int = int(
+        _get("BACKEND_MAX_RESPONSE_BYTES", "200000")
+    )  # type: ignore[arg-type]
+
+    LIGHTHOUSE_REPORT_URL: str = _get("LIGHTHOUSE_REPORT_URL", required=True)  # type: ignore[assignment]
+    LIGHTHOUSE_TRAFFIC_URL: str = _get("LIGHTHOUSE_TRAFFIC_URL", required=True)  # type: ignore[assignment]
+    LIGHTHOUSE_ERRORS_URL: str = _get("LIGHTHOUSE_ERRORS_URL", required=True)  # type: ignore[assignment]
+    LIGHTHOUSE_HEALTH_URL: str = _get("LIGHTHOUSE_HEALTH_URL", required=True)  # type: ignore[assignment]
+    LIGHTHOUSE_ADMIN_TOKEN: str = _get("LIGHTHOUSE_ADMIN_TOKEN", required=True)  # type: ignore[assignment]
+
     # ── Logging ──────────────────────────────────────────────────────────────
     LOG_LEVEL: str = _get("LOG_LEVEL", "INFO")  # type: ignore[assignment]
 
 
 # Singleton — import this everywhere
 settings = Settings()
+
+if not settings.BACKEND_ALLOWED_HOSTS:
+    raise EnvironmentError("BACKEND_ALLOWED_HOSTS must include at least one hostname.")

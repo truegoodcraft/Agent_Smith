@@ -66,10 +66,13 @@ class SlashCog(commands.Cog):
             return False
         return True
 
-    def _quality_gate_interpretation(self, output: str) -> bool:
+    def _quality_gate_interpretation(
+        self, output: str, preprocessed: dict, route_label: str
+    ) -> bool:
         """
         Validate model interpretation output.
-        Reject if it contains internal scaffolding or is too long.
+        Reject if it contains internal scaffolding, is too long, or is too generic
+        compared to actual data conditions (grounding check).
         """
         # Max reasonable interpretation is ~500 chars (Discord allows 2000)
         if len(output) > 500:
@@ -88,6 +91,105 @@ class SlashCog(commands.Cog):
         if not output.strip():
             log.warning("quality_gate interpretation_empty")
             return False
+
+        # === GROUNDING HEURISTIC (v0.1.4+) ===
+        # Reject model output if it's more generic than deterministic fallback.
+        # Apply route-specific grounding checks.
+        if route_label == "report":
+            # Extract key metrics from preprocessed payload
+            dl_today = None
+            err_today = None
+            uc_today = None
+
+            # Check if using 7-day data
+            last_7d = preprocessed.get("last_7_days")
+            if isinstance(last_7d, dict) and any(v is not None for v in last_7d.values()):
+                dl_today = last_7d.get("downloads")
+                err_today = last_7d.get("errors")
+                uc_today = last_7d.get("update_checks")
+            else:
+                dl = preprocessed.get("downloads")
+                if isinstance(dl, dict):
+                    dl_today = dl.get("today")
+
+                err = preprocessed.get("errors")
+                if isinstance(err, dict):
+                    err_today = err.get("today")
+
+                uc = preprocessed.get("update_checks")
+                if isinstance(uc, dict):
+                    uc_today = uc.get("today")
+
+            # Check for low-signal condition
+            counters_present = sum(
+                1 for v in [uc_today, dl_today, err_today] if v is not None
+            )
+            counters_nonzero = sum(
+                1 for v in [uc_today, dl_today, err_today] if v is not None and v > 0
+            )
+            is_low_signal = (counters_present > 0 and counters_nonzero == 0) or (
+                counters_present == 0
+            )
+
+            # Grounding check 1: If downloads == 0, model must mention limited/no activity
+            if dl_today is not None and dl_today == 0:
+                activity_mentioned = any(
+                    phrase in output_lower
+                    for phrase in [
+                        "no download",
+                        "zero download",
+                        "without download",
+                        "but no download",
+                        "limited activity",
+                        "no activity",
+                        "thin",
+                        "low-signal",
+                    ]
+                )
+                if not activity_mentioned:
+                    log.warning(
+                        "quality_gate grounding_check_failed route=%s reason=zero_downloads_not_mentioned",
+                        route_label,
+                    )
+                    return False
+
+            # Grounding check 2: If errors > 0, model must mention errors/issues
+            if err_today is not None and err_today > 0:
+                error_mentioned = any(
+                    phrase in output_lower
+                    for phrase in [
+                        "error",
+                        "issue",
+                        "problem",
+                        "failure",
+                        "concern",
+                    ]
+                )
+                if not error_mentioned:
+                    log.warning(
+                        "quality_gate grounding_check_failed route=%s reason=errors_not_mentioned",
+                        route_label,
+                    )
+                    return False
+
+            # Grounding check 3: If low-signal, model must not sound overly confident
+            if is_low_signal:
+                overly_confident = any(
+                    phrase in output_lower
+                    for phrase in [
+                        "normal",
+                        "healthy",
+                        "good",
+                        "strong",
+                        "active",
+                    ]
+                )
+                if overly_confident:
+                    log.warning(
+                        "quality_gate grounding_check_failed route=%s reason=low_signal_but_confident",
+                        route_label,
+                    )
+                    return False
 
         return True
 
@@ -138,7 +240,9 @@ class SlashCog(commands.Cog):
 
         # Interpretation section: use model output if good, otherwise fallback
         use_fallback_interpretation = True
-        if interpretation and self._quality_gate_interpretation(interpretation):
+        if interpretation and self._quality_gate_interpretation(
+            interpretation, preprocessed, route_label
+        ):
             use_fallback_interpretation = False
             lines.append("**Interpretation**")
             lines.append(interpretation.strip())
@@ -267,9 +371,11 @@ class SlashCog(commands.Cog):
             )
             use_fallback = True
 
-        # === QUALITY GATE: REJECT IF SCAFFOLDING LEAKED ===
+        # === QUALITY GATE: REJECT IF SCAFFOLDING LEAKED OR UNGROUNDED ===
         if interpretation and not use_fallback:
-            if not self._quality_gate_interpretation(interpretation):
+            if not self._quality_gate_interpretation(
+                interpretation, preprocessed, route_label
+            ):
                 log.warning(
                     "quality_gate_interpretation_rejected route=%s",
                     route_label,

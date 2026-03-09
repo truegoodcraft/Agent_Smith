@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.1.4] — 2026-03-09
+
+### Changed (Report Interpretation Grounding)
+
+* **Condition-aware interpretation**: `interpret_report_fallback()` now reflects actual data conditions instead of defaulting to generic statements. Checks combinations of update checks, downloads, and errors to produce meaningful interpretations.
+* **Zero-download detection**: When downloads are zero but update checks are present, interpretation explicitly mentions "update check activity present but no downloads recorded."
+* **Error presence detection**: When errors > 0, interpretation explicitly mentions error activity and recommends investigation.
+* **Low-signal awareness**: When most counters are zero or missing, interpretation acknowledges thin telemetry instead of claiming normal activity.
+* **Grounding heuristic**: Added model output grounding checks for report route:
+  - Rejects model interpretation if downloads == 0 but model doesn't mention limited/no activity
+  - Rejects model interpretation if errors > 0 but model doesn't mention errors/issues
+  - Rejects model interpretation if data is low-signal but model sounds overly confident (using words like "normal", "healthy", "active")
+* **Quality gate enhancement**: `_quality_gate_interpretation()` now accepts preprocessed data and route label to perform route-specific grounding validation.
+
+### Notes
+
+* Interpretation remains 1-2 sentences maximum; no format regression.
+* Deterministic fallback now preferred when model output is too generic.
+* Command surface unchanged: `/report`, `/traffic`, `/errors`, `/health` remain the only commands.
+
+## [0.1.3] — 2026-03-09
+
+### Changed (Report Summary Strengthening)
+
+* **Report summary enrichment**: `/report` summary section now always includes available core counters (update checks, downloads, errors) when present. Previously, summary could appear empty even when backend data contained useful metrics.
+* **Preferred reporting window**: Summary builder now prefers `last_7_days` data when available and falls back to `today` data if not present. This provides more meaningful signal coverage in the summary window.
+* **Low-signal detection**: Added deterministic low-signal indicator when most counters are zero or unavailable. Operators now receive explicit feedback: "Telemetry is low-signal in this window."
+* **Preprocessing enhancement**: `preprocess_report()` now extracts actual counter values from `last_7_days` payload for use by summary builder, not just summary flags.
+
+### Notes
+
+* Command surface unchanged: `/report`, `/traffic`, `/errors`, `/health` remain the only commands.
+* Interpretation remains constrained to one short sentence; no model expansion.
+* No raw JSON or internal scaffolding is shown in output.
+
 ## [0.1.2] — 2026-03-09
 
 ### Changed (Phase 4: Formatter-First Response Architecture)

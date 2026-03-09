@@ -135,8 +135,15 @@ def preprocess_report(data: dict[str, Any]) -> dict[str, Any]:
         summary["last_7_days_summary"] = (
             "data present" if any(last_7d.values()) else "no activity"
         )
+        # Extract actual counter values from last_7_days for summary builder
+        summary["last_7_days"] = {
+            "update_checks": _get_int_or_none(last_7d, "update_checks"),
+            "downloads": _get_int_or_none(last_7d, "downloads"),
+            "errors": _get_int_or_none(last_7d, "errors"),
+        }
     else:
         summary["last_7_days_summary"] = "unavailable"
+        summary["last_7_days"] = None
 
     month_to_date = data.get("month_to_date")
     if isinstance(month_to_date, dict):
@@ -339,27 +346,68 @@ def preprocess_errors(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_report_summary(payload: dict[str, Any]) -> list[str]:
-    """Build deterministic summary bullets for report."""
+    """
+    Build deterministic summary bullets for report.
+    
+    Prefers last_7_days data when available, falls back to today.
+    Includes low-signal detection when most counters are zero or missing.
+    """
     bullets = []
-
-    uc = payload.get("update_checks")
-    if isinstance(uc, dict):
-        today = uc.get("today")
-        if today is not None:
-            bullets.append(f"Update checks: {today}")
-
-    dl = payload.get("downloads")
-    if isinstance(dl, dict):
-        today = dl.get("today")
-        if today is not None:
-            bullets.append(f"Downloads: {today}")
-
-    err = payload.get("errors")
-    if isinstance(err, dict):
-        today = err.get("today")
-        if today is not None:
-            bullets.append(f"Errors: {today}")
-
+    
+    # Prefer last_7_days data if present, otherwise fall back to today
+    last_7d = payload.get("last_7_days")
+    use_last_7d = isinstance(last_7d, dict) and any(
+        v is not None for v in last_7d.values()
+    )
+    
+    update_checks_val = None
+    downloads_val = None
+    errors_val = None
+    window_label = ""
+    
+    if use_last_7d:
+        update_checks_val = last_7d.get("update_checks")
+        downloads_val = last_7d.get("downloads")
+        errors_val = last_7d.get("errors")
+        window_label = " (7d)"
+    else:
+        # Fall back to today data
+        uc = payload.get("update_checks")
+        if isinstance(uc, dict):
+            update_checks_val = uc.get("today")
+        
+        dl = payload.get("downloads")
+        if isinstance(dl, dict):
+            downloads_val = dl.get("today")
+        
+        err = payload.get("errors")
+        if isinstance(err, dict):
+            errors_val = err.get("today")
+    
+    # Always include available core counters
+    if update_checks_val is not None:
+        bullets.append(f"Update checks: {update_checks_val}{window_label}")
+    
+    if downloads_val is not None:
+        bullets.append(f"Downloads: {downloads_val}{window_label}")
+    
+    if errors_val is not None:
+        bullets.append(f"Errors: {errors_val}{window_label}")
+    
+    # Low-signal detection: if most counters are zero or missing
+    counters_present = sum(
+        1 for v in [update_checks_val, downloads_val, errors_val] if v is not None
+    )
+    counters_nonzero = sum(
+        1 for v in [update_checks_val, downloads_val, errors_val] 
+        if v is not None and v > 0
+    )
+    
+    if counters_present > 0 and counters_nonzero == 0:
+        bullets.append("Telemetry is low-signal in this window.")
+    elif counters_present == 0:
+        bullets.append("Telemetry is low-signal in this window.")
+    
     return bullets
 
 
@@ -552,38 +600,62 @@ def build_errors_signals(payload: dict[str, Any]) -> list[str]:
 
 
 def interpret_report_fallback(payload: dict[str, Any]) -> str:
-    """Generate fallback interpretation for report (no model)."""
-    dl_present = False
-    err_present = False
+    """
+    Generate fallback interpretation for report (no model).
+    
+    Condition-aware: reflects actual data state (errors, downloads, update checks).
+    Prefers combinations over generic fallback.
+    """
+    # Extract key metrics (prefer last_7_days if available)
     uc_today = None
-    low_signal = False
-
-    dl = payload.get("downloads")
-    if isinstance(dl, dict):
-        dl_present = dl.get("present", False)
-
-    err = payload.get("errors")
-    if isinstance(err, dict):
-        err_present = err.get("present", False)
-        uc_today = err.get("today")
-
-    uc = payload.get("update_checks")
-    if isinstance(uc, dict):
-        uc_today = uc.get("today")
-
-    last7 = payload.get("last_7_days_summary", "").lower()
-    month = payload.get("month_to_date_summary", "").lower()
-    if "no activity" in last7 and "no activity" in month:
-        low_signal = True
-
-    if low_signal:
-        return "Telemetry is thin; little usage activity visible in this window."
-    elif not dl_present and uc_today:
-        return "Endpoint is checking for updates but no download activity is recorded."
-    elif err_present:
-        return "Recent error activity suggests client or backend issues may be present."
+    dl_today = None
+    err_today = None
+    
+    last_7d = payload.get("last_7_days")
+    use_7d = isinstance(last_7d, dict) and any(v is not None for v in last_7d.values())
+    
+    if use_7d:
+        uc_today = last_7d.get("update_checks")
+        dl_today = last_7d.get("downloads")
+        err_today = last_7d.get("errors")
     else:
-        return "Normal telemetry activity observed."
+        uc = payload.get("update_checks")
+        if isinstance(uc, dict):
+            uc_today = uc.get("today")
+        
+        dl = payload.get("downloads")
+        if isinstance(dl, dict):
+            dl_today = dl.get("today")
+        
+        err = payload.get("errors")
+        if isinstance(err, dict):
+            err_today = err.get("today")
+    
+    # Low-signal detection
+    counters_present = sum(1 for v in [uc_today, dl_today, err_today] if v is not None)
+    counters_nonzero = sum(1 for v in [uc_today, dl_today, err_today] if v is not None and v > 0)
+    
+    if counters_present > 0 and counters_nonzero == 0:
+        return "Telemetry is thin; all counters are zero in this window."
+    elif counters_present == 0:
+        return "Telemetry is unavailable or incomplete."
+    
+    # Condition-aware interpretation based on actual values
+    has_update_checks = uc_today is not None and uc_today > 0
+    has_downloads = dl_today is not None and dl_today > 0
+    has_errors = err_today is not None and err_today > 0
+    
+    # Prioritize error + no downloads case (most operationally important)
+    if has_errors and not has_downloads and has_update_checks:
+        return "Recent errors present; update checks active but no downloads recorded."
+    elif has_errors:
+        return "Recent error activity present; investigation recommended."
+    elif not has_downloads and has_update_checks:
+        return "Update check activity present but no downloads recorded."
+    elif has_downloads and has_update_checks and not has_errors:
+        return "Normal activity: update checks and downloads present with no errors."
+    else:
+        return "Limited activity in this telemetry window."
 
 
 def interpret_health_fallback(payload: dict[str, Any]) -> str:

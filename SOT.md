@@ -2,9 +2,9 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.1.2+)
+## Current Mission (v0.1.4+)
 
-Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed, read-only backend telemetry. It retrieves backend metrics, preprocesses them into operator-focused summaries in Python, and delivers fully structured operator responses assembled entirely in Python with optional model-generated interpretation.
+Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed, read-only backend telemetry. It retrieves backend metrics, preprocesses them into operator-focused summaries in Python, and delivers fully structured operator responses assembled entirely in Python with optional model-generated interpretation. Report summaries always include available core counters with intelligent window selection. Interpretations are grounded in actual data conditions and reject generic model output that doesn't reflect reality.
 
 ## Core Invariants
 
@@ -47,12 +47,16 @@ Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed
    - No raw telemetry JSON is shown to Discord users in normal success responses.
    - Internal scaffolding (section headers, field names, payload dumps) never leaks to operators.
 
-8. **Quality gate invariant** ⚡ **(v0.1.2+)**
+8. **Quality gate invariant** ⚡ **(v0.1.2+, enhanced v0.1.4+)**
    - Model interpretation output is validated before use:
      - Max 500 characters.
      - Must not contain patterns: `section:`, `sanitized telemetry`, `route:`, `summary:`, `signals:`, etc.
      - Must not contain generic analytics language or schema discussion.
-   - If output fails gates, deterministic fallback interpretation is used instead.
+   - **Grounding heuristic** ⚡ **(v0.1.4+)**: For report route, model output is rejected if too generic compared to actual data:
+     - If downloads == 0, model must mention limited/no activity (e.g., "no download", "limited activity", "thin").
+     - If errors > 0, model must mention errors/issues/problems.
+     - If low-signal (most counters zero/missing), model must not sound overly confident (no "normal", "healthy", "active").
+   - If output fails gates or grounding checks, deterministic fallback interpretation is used instead.
 
 9. **Security invariant**
    - All backend URLs must be HTTPS.
@@ -61,7 +65,7 @@ Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed
    - Payloads are bounded (`BACKEND_MAX_RESPONSE_BYTES`).
    - Auth tokens are environment-configured, never hardcoded or user-supplied.
 
-9. **Freeform-message prohibition invariant**
+10. **Freeform-message prohibition invariant**
    - Normal Discord messages do not trigger AI chat responses.
    - If received, normal messages get a brief redirect to slash commands.
    - No LLM-chat path exists for freeform text.
@@ -117,6 +121,36 @@ All commands:
   - Marks absent fields explicitly (e.g., `[not present in payload]`) instead of inventing data.
   - Returns compact operator-facing dict.
 - No business logic; only extraction and simple math.
+- **Report preprocessing enhancement** ⚡ **(v0.1.3+)**: `preprocess_report()` now extracts actual counter values from `last_7_days` payload for use by summary builder, providing richer window-based reporting when available.
+
+### Deterministic Summary Builders ⚡ **(v0.1.3+)**
+- Route-specific summary builders (100% Python):
+  - `build_report_summary(payload)` → deterministic summary bullets with core counters.
+  - `build_health_summary(payload)` → health status and component status.
+  - `build_traffic_summary(payload)` → request volume and latency metrics.
+  - `build_errors_summary(payload)` → error counts and top types.
+- **Report summary strengthening** ⚡ **(v0.1.3+)**:
+  - Summary builder prefers `last_7_days` data when available, falls back to `today` data.
+  - Always includes available core counters: update checks, downloads, errors.
+  - Adds deterministic low-signal detection: "Telemetry is low-signal in this window." when most counters are zero or missing.
+  - Window label `(7d)` is appended when displaying 7-day data.
+- Produces concise bullet-point summaries directly from preprocessed payload fields.
+- Summary section is never model-generated.
+
+### Deterministic Interpretation Fallbacks ⚡ **(v0.1.1+, enhanced v0.1.4+)**
+- Route-specific interpretation fallback functions (no LLM):
+  - `interpret_report_fallback(payload)` → condition-aware interpretation based on actual metrics.
+  - `interpret_health_fallback(payload)` → health status interpretation.
+  - `interpret_traffic_fallback(payload)` → traffic pattern interpretation.
+  - `interpret_errors_fallback(payload)` → error condition interpretation.
+- Used when model fails, times out, or output fails quality gates.
+- **Report interpretation grounding** ⚡ **(v0.1.4+)**:
+  - Checks combinations of update checks, downloads, and errors to produce meaningful statements.
+  - If update checks > 0 and downloads == 0: mentions check activity without successful downloads.
+  - If errors > 0: explicitly mentions error presence and recommends investigation.
+  - If data is thin (most counters zero/missing): acknowledges limited telemetry.
+  - Only uses neutral language ("normal activity") when actually justified by data.
+- Produces 1-2 sentence operational interpretations directly from preprocessed data.
 
 ### Fallback Formatters ⚡ **(v0.1.1+)**
 - Route-specific deterministic formatters (no LLM):

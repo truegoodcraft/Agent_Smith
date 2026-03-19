@@ -627,31 +627,43 @@ def interpret_report_fallback(payload: dict[str, Any]) -> str:
     dl_today = selected["downloads"]
     err_today = selected["errors"]
     
+    window_label = selected["label"]
+
     # Low-signal detection
     counters_present = sum(1 for v in [uc_today, dl_today, err_today] if v is not None)
     counters_nonzero = sum(1 for v in [uc_today, dl_today, err_today] if v is not None and v > 0)
-    
+
+    base = (
+        f"window={window_label}; "
+        f"update_checks={uc_today}; downloads={dl_today}; errors={err_today}; "
+    )
+
     if counters_present > 0 and counters_nonzero == 0:
-        return "Telemetry is thin; all counters are zero in this window."
+        return base + "state=low_signal"
     elif counters_present == 0:
-        return "Telemetry is unavailable or incomplete."
-    
-    # Condition-aware interpretation based on actual values
+        return base + "state=unavailable"
+
+    # Condition classification derived from selected-window counters only.
     has_update_checks = uc_today is not None and uc_today > 0
     has_downloads = dl_today is not None and dl_today > 0
     has_errors = err_today is not None and err_today > 0
-    
-    # Prioritize error + no downloads case (most operationally important)
+
     if has_errors and not has_downloads and has_update_checks:
-        return "Recent errors present; update checks active but no downloads recorded."
+        return base + "state=errors_with_checks_no_downloads"
     elif has_errors:
-        return "Recent error activity present; investigation recommended."
+        return base + "state=errors_present"
     elif not has_downloads and has_update_checks:
-        return "Update check activity present but no downloads recorded."
-    elif has_downloads and has_update_checks and not has_errors:
-        return "Normal activity: update checks and downloads present with no errors."
+        return base + "state=checks_no_downloads"
+    elif (
+        uc_today is not None
+        and dl_today is not None
+        and dl_today > uc_today
+    ):
+        return base + "state=downloads_exceed_checks"
+    elif has_downloads and has_update_checks:
+        return base + "state=activity_present"
     else:
-        return "Limited activity in this telemetry window."
+        return base + "state=mixed_or_limited"
 
 
 def interpret_health_fallback(payload: dict[str, Any]) -> str:

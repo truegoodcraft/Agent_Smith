@@ -66,6 +66,11 @@ class SlashCog(commands.Cog):
             return False
         return True
 
+    @staticmethod
+    def _should_use_model_for_route(route_label: str) -> bool:
+        """Report is deterministic-only; other routes may use model interpretation."""
+        return route_label != "report"
+
     def _quality_gate_interpretation(
         self, output: str, preprocessed: dict, route_label: str
     ) -> bool:
@@ -203,6 +208,18 @@ class SlashCog(commands.Cog):
         if not handlers:
             return "\n".join(lines) + "Unknown route."
 
+        if route_label == "report":
+            summary_bullets = handlers["builder_summary"](preprocessed)
+            if summary_bullets:
+                lines.append("**Summary**")
+                for bullet in summary_bullets:
+                    lines.append(f"· {bullet}")
+                lines.append("")
+
+            lines.append("**Interpretation**")
+            lines.append(handlers["interpret_fallback"](preprocessed))
+            return "\n".join(lines).strip()
+
         # Build Summary section (fully deterministic)
         summary_bullets = handlers["builder_summary"](preprocessed)
         if summary_bullets:
@@ -324,44 +341,45 @@ class SlashCog(commands.Cog):
         interpretation = None
         use_fallback = False
 
-        preprocessed_json = json.dumps(preprocessed, indent=2, sort_keys=True)
-        interpretation_prompt = (
-            f"Preprocessed telemetry ({route_label}):\n"
-            f"{preprocessed_json}\n\n"
-            "Provide a 1–3 sentence interpretation of this data. "
-            "No headings, no bullets, no schema discussion."
-        )
-
-        messages = [
-            {"role": "system", "content": _INTERPRETATION_SYSTEM_PROMPT},
-            {"role": "user", "content": interpretation_prompt},
-        ]
-
-        try:
-            interpretation = await self.ollama.chat(messages, model=settings.OLLAMA_MODEL)
-            log.debug(
-                "ollama_interpretation_received route=%s output_len=%d",
-                route_label,
-                len(interpretation),
+        if self._should_use_model_for_route(route_label):
+            preprocessed_json = json.dumps(preprocessed, indent=2, sort_keys=True)
+            interpretation_prompt = (
+                f"Preprocessed telemetry ({route_label}):\n"
+                f"{preprocessed_json}\n\n"
+                "Provide a 1–3 sentence interpretation of this data. "
+                "No headings, no bullets, no schema discussion."
             )
-        except OllamaError as exc:
-            log.warning(
-                "ollama_error route=%s error=%s",
-                route_label,
-                exc,
-            )
-            use_fallback = True
 
-        # === QUALITY GATE: REJECT IF SCAFFOLDING LEAKED OR UNGROUNDED ===
-        if interpretation and not use_fallback:
-            if not self._quality_gate_interpretation(
-                interpretation, preprocessed, route_label
-            ):
-                log.warning(
-                    "quality_gate_interpretation_rejected route=%s",
+            messages = [
+                {"role": "system", "content": _INTERPRETATION_SYSTEM_PROMPT},
+                {"role": "user", "content": interpretation_prompt},
+            ]
+
+            try:
+                interpretation = await self.ollama.chat(messages, model=settings.OLLAMA_MODEL)
+                log.debug(
+                    "ollama_interpretation_received route=%s output_len=%d",
                     route_label,
+                    len(interpretation),
+                )
+            except OllamaError as exc:
+                log.warning(
+                    "ollama_error route=%s error=%s",
+                    route_label,
+                    exc,
                 )
                 use_fallback = True
+
+            # === QUALITY GATE: REJECT IF SCAFFOLDING LEAKED OR UNGROUNDED ===
+            if interpretation and not use_fallback:
+                if not self._quality_gate_interpretation(
+                    interpretation, preprocessed, route_label
+                ):
+                    log.warning(
+                        "quality_gate_interpretation_rejected route=%s",
+                        route_label,
+                    )
+                    use_fallback = True
 
         # === BUILD FINAL RESPONSE IN PYTHON ===
         # Summary and Signals are 100% deterministic.

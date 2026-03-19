@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.6] — 2026-03-19
+
+### Changed (Report Route Deterministic-Only)
+
+* **No model path for `/report`**: `/report` now never calls Ollama. Route policy in `bot/commands.py` enforces deterministic-only handling for report while preserving model support for non-report routes.
+* **Short report output shape**: `/report` responses now include only `Summary` and `Interpretation` sections. `Signals` are no longer rendered for report output.
+* **Counter-only report interpretation**: `interpret_report_fallback()` now returns deterministic, non-speculative state output derived only from selected-window values:
+  - `update_checks`
+  - `downloads`
+  - `errors`
+  and selected window label (`last_7_days` or `today`).
+* **No generated prose for `/report`**: Report interpretation is now a compact deterministic state line (for example: `window=today; update_checks=6; downloads=0; errors=0; state=checks_no_downloads`).
+
+### Added
+
+* Added `tests/test_report_route_policy.py` to verify report route model policy marker (`return route_label != "report"`).
+* Updated `tests/test_report_logic.py` assertions to validate deterministic report interpretation state output.
+
 ## [0.1.5] — 2026-03-19
 
 ### Changed (Unified Report Window Semantics)

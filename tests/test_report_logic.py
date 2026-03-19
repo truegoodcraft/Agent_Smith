@@ -32,7 +32,7 @@ def test_report_logic_7d_selected_over_today_for_downloads() -> None:
 
     assert "Downloads: 3 (7d)" in summary
     assert "No download activity recorded" not in signals
-    assert "downloads present" in interpretation.lower()
+    assert "window=last_7_days; update_checks=8; downloads=3; errors=0; state=activity_present" == interpretation
 
 
 def test_report_logic_all_zero_low_signal() -> None:
@@ -49,7 +49,7 @@ def test_report_logic_all_zero_low_signal() -> None:
     assert "Telemetry is low-signal in this window." in summary
     assert "No download activity recorded" in signals
     assert "Baseline: significantly low signal across period" in signals
-    assert interpretation == "Telemetry is thin; all counters are zero in this window."
+    assert interpretation == "window=today; update_checks=0; downloads=0; errors=0; state=low_signal"
 
 
 def test_report_logic_checks_only() -> None:
@@ -64,7 +64,7 @@ def test_report_logic_checks_only() -> None:
 
     assert "Update checks: 6" in summary
     assert "Downloads: 0" in summary
-    assert interpretation == "Update check activity present but no downloads recorded."
+    assert interpretation == "window=today; update_checks=6; downloads=0; errors=0; state=checks_no_downloads"
 
 
 def test_report_logic_errors_present() -> None:
@@ -78,7 +78,7 @@ def test_report_logic_errors_present() -> None:
     interpretation = interpret_report_fallback(payload)
 
     assert "Recent error activity present (4 errors)" in signals
-    assert interpretation == "Recent error activity present; investigation recommended."
+    assert interpretation == "window=today; update_checks=5; downloads=1; errors=4; state=errors_present"
 
 
 def test_report_logic_downloads_exceed_update_checks_signal() -> None:

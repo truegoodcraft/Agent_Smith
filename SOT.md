@@ -2,9 +2,9 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.1.5+)
+## Current Mission (v0.1.6+)
 
-Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed, read-only backend telemetry. It retrieves backend metrics, preprocesses them into operator-focused summaries in Python, and delivers fully structured operator responses assembled entirely in Python with optional model-generated interpretation. Report summaries, signals, fallback interpretation, and report quality-gate grounding now all use one shared selected report window (`last_7_days` preferred, else `today`). Interpretations are grounded in actual data conditions and reject generic model output that doesn't reflect reality.
+Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed, read-only backend telemetry. It retrieves backend metrics, preprocesses them into operator-focused summaries in Python, and delivers structured operator responses assembled in Python. `/report` is deterministic-only and never calls Ollama; it renders only Summary and Interpretation from selected-window counters (`update_checks`, `downloads`, `errors`). Non-report routes may still use optional model-generated interpretation.
 
 ## Core Invariants
 
@@ -46,8 +46,15 @@ Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed
    - All response structure (title, sections, bullets, formatting) is under operator control in Python code.
    - No raw telemetry JSON is shown to Discord users in normal success responses.
    - Internal scaffolding (section headers, field names, payload dumps) never leaks to operators.
+   - **Report format constraint** ⚡ **(v0.1.6+)**: `/report` outputs only `Summary` and `Interpretation` sections.
 
-8. **Quality gate invariant** ⚡ **(v0.1.2+, enhanced v0.1.4+, unified v0.1.5+)**
+8. **Report deterministic-only invariant** ⚡ **(v0.1.6+)**
+   - `/report` must never call Ollama.
+   - `/report` interpretation must be deterministic and derived only from selected-window values: `update_checks`, `downloads`, `errors`.
+   - `/report` uses no generated prose and no speculative signals.
+   - Selected-window policy remains fixed: prefer `last_7_days` when present, otherwise `today`.
+
+9. **Quality gate invariant** ⚡ **(v0.1.2+, enhanced v0.1.4+, unified v0.1.5+)**
    - Model interpretation output is validated before use:
      - Max 500 characters.
      - Must not contain patterns: `section:`, `sanitized telemetry`, `route:`, `summary:`, `signals:`, etc.
@@ -59,14 +66,14 @@ Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed
     - For report route, grounding checks use the same selected report window as summary/signals/fallback interpretation (`select_report_window()`), preventing cross-window contradictions.
    - If output fails gates or grounding checks, deterministic fallback interpretation is used instead.
 
-9. **Security invariant**
+10. **Security invariant**
    - All backend URLs must be HTTPS.
    - All backend hosts must be in `BACKEND_ALLOWED_HOSTS` allowlist.
    - All requests use explicit timeout (`BACKEND_TIMEOUT_SECONDS`).
    - Payloads are bounded (`BACKEND_MAX_RESPONSE_BYTES`).
    - Auth tokens are environment-configured, never hardcoded or user-supplied.
 
-10. **Freeform-message prohibition invariant**
+11. **Freeform-message prohibition invariant**
    - Normal Discord messages do not trigger AI chat responses.
    - If received, normal messages get a brief redirect to slash commands.
    - No LLM-chat path exists for freeform text.
@@ -142,27 +149,25 @@ All commands:
 - Produces concise bullet-point summaries directly from preprocessed payload fields.
 - Summary section is never model-generated.
 
-### Deterministic Interpretation Fallbacks ⚡ **(v0.1.1+, enhanced v0.1.4+, unified window v0.1.5+)**
+### Deterministic Interpretation Fallbacks ⚡ **(v0.1.1+, enhanced v0.1.4+, unified window v0.1.5+, report strict v0.1.6+)**
 - Route-specific interpretation fallback functions (no LLM):
   - `interpret_report_fallback(payload)` → condition-aware interpretation based on actual metrics.
   - `interpret_health_fallback(payload)` → health status interpretation.
   - `interpret_traffic_fallback(payload)` → traffic pattern interpretation.
   - `interpret_errors_fallback(payload)` → error condition interpretation.
 - Used when model fails, times out, or output fails quality gates.
-- **Report interpretation grounding** ⚡ **(v0.1.4+)**:
-  - Checks combinations of update checks, downloads, and errors to produce meaningful statements.
-  - If update checks > 0 and downloads == 0: mentions check activity without successful downloads.
-  - If errors > 0: explicitly mentions error presence and recommends investigation.
-  - If data is thin (most counters zero/missing): acknowledges limited telemetry.
-  - Only uses neutral language ("normal activity") when actually justified by data.
-   - Uses the shared selected-window helper (`select_report_window`) so fallback interpretation cannot diverge from summary/signals windows.
-- Produces 1-2 sentence operational interpretations directly from preprocessed data.
+- **Report interpretation contract** ⚡ **(v0.1.6+)**:
+   - Uses shared selected-window helper (`select_report_window`) and only selected-window counters.
+   - Emits compact deterministic state output instead of generated prose.
+   - No speculative language; no model fallback path for `/report`.
+- Non-report routes may still produce brief model or deterministic fallback interpretations.
 
 ### Deterministic Report Signal Rules ⚡ **(v0.1.5+)**
 
 - Report signals are derived from the shared selected report window only.
 - Hard contradiction rule: never emit `No download activity recorded` when selected-window downloads are greater than zero.
 - Report signals include mismatch detection when selected-window downloads exceed selected-window update checks.
+- `/report` presentation layer (v0.1.6+) does not render a Signals section.
 
 ### Fallback Formatters ⚡ **(v0.1.1+)**
 - Route-specific deterministic formatters (no LLM):

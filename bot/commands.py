@@ -12,7 +12,7 @@ from config.settings import settings
 from ollama.client import OllamaClient, OllamaError
 from services.backend_client import BackendClient
 from services.telemetry_validation import validate_and_sanitize
-from services.telemetry_preprocess import ROUTE_HANDLERS
+from services.telemetry_preprocess import ROUTE_HANDLERS, select_report_window
 from utils.formatting import split_message
 from utils.logger import get_logger
 
@@ -96,29 +96,10 @@ class SlashCog(commands.Cog):
         # Reject model output if it's more generic than deterministic fallback.
         # Apply route-specific grounding checks.
         if route_label == "report":
-            # Extract key metrics from preprocessed payload
-            dl_today = None
-            err_today = None
-            uc_today = None
-
-            # Check if using 7-day data
-            last_7d = preprocessed.get("last_7_days")
-            if isinstance(last_7d, dict) and any(v is not None for v in last_7d.values()):
-                dl_today = last_7d.get("downloads")
-                err_today = last_7d.get("errors")
-                uc_today = last_7d.get("update_checks")
-            else:
-                dl = preprocessed.get("downloads")
-                if isinstance(dl, dict):
-                    dl_today = dl.get("today")
-
-                err = preprocessed.get("errors")
-                if isinstance(err, dict):
-                    err_today = err.get("today")
-
-                uc = preprocessed.get("update_checks")
-                if isinstance(uc, dict):
-                    uc_today = uc.get("today")
+            selected = select_report_window(preprocessed)
+            dl_today = selected["downloads"]
+            err_today = selected["errors"]
+            uc_today = selected["update_checks"]
 
             # Check for low-signal condition
             counters_present = sum(

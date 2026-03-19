@@ -2,9 +2,9 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.1.4+)
+## Current Mission (v0.1.5+)
 
-Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed, read-only backend telemetry. It retrieves backend metrics, preprocesses them into operator-focused summaries in Python, and delivers fully structured operator responses assembled entirely in Python with optional model-generated interpretation. Report summaries always include available core counters with intelligent window selection. Interpretations are grounded in actual data conditions and reject generic model output that doesn't reflect reality.
+Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed, read-only backend telemetry. It retrieves backend metrics, preprocesses them into operator-focused summaries in Python, and delivers fully structured operator responses assembled entirely in Python with optional model-generated interpretation. Report summaries, signals, fallback interpretation, and report quality-gate grounding now all use one shared selected report window (`last_7_days` preferred, else `today`). Interpretations are grounded in actual data conditions and reject generic model output that doesn't reflect reality.
 
 ## Core Invariants
 
@@ -47,15 +47,16 @@ Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed
    - No raw telemetry JSON is shown to Discord users in normal success responses.
    - Internal scaffolding (section headers, field names, payload dumps) never leaks to operators.
 
-8. **Quality gate invariant** ⚡ **(v0.1.2+, enhanced v0.1.4+)**
+8. **Quality gate invariant** ⚡ **(v0.1.2+, enhanced v0.1.4+, unified v0.1.5+)**
    - Model interpretation output is validated before use:
      - Max 500 characters.
      - Must not contain patterns: `section:`, `sanitized telemetry`, `route:`, `summary:`, `signals:`, etc.
      - Must not contain generic analytics language or schema discussion.
-   - **Grounding heuristic** ⚡ **(v0.1.4+)**: For report route, model output is rejected if too generic compared to actual data:
+    - **Grounding heuristic** ⚡ **(v0.1.4+, unified window v0.1.5+)**: For report route, model output is rejected if too generic compared to actual data:
      - If downloads == 0, model must mention limited/no activity (e.g., "no download", "limited activity", "thin").
      - If errors > 0, model must mention errors/issues/problems.
      - If low-signal (most counters zero/missing), model must not sound overly confident (no "normal", "healthy", "active").
+    - For report route, grounding checks use the same selected report window as summary/signals/fallback interpretation (`select_report_window()`), preventing cross-window contradictions.
    - If output fails gates or grounding checks, deterministic fallback interpretation is used instead.
 
 9. **Security invariant**
@@ -123,7 +124,7 @@ All commands:
 - No business logic; only extraction and simple math.
 - **Report preprocessing enhancement** ⚡ **(v0.1.3+)**: `preprocess_report()` now extracts actual counter values from `last_7_days` payload for use by summary builder, providing richer window-based reporting when available.
 
-### Deterministic Summary Builders ⚡ **(v0.1.3+)**
+### Deterministic Summary Builders ⚡ **(v0.1.3+, unified window v0.1.5+)**
 - Route-specific summary builders (100% Python):
   - `build_report_summary(payload)` → deterministic summary bullets with core counters.
   - `build_health_summary(payload)` → health status and component status.
@@ -134,10 +135,14 @@ All commands:
   - Always includes available core counters: update checks, downloads, errors.
   - Adds deterministic low-signal detection: "Telemetry is low-signal in this window." when most counters are zero or missing.
   - Window label `(7d)` is appended when displaying 7-day data.
+- **Shared window contract** ⚡ **(v0.1.5+)**:
+   - Report summary, report signals, report fallback interpretation, and report quality-gate grounding all derive counters from one helper: `select_report_window(payload)`.
+   - Selection policy is fixed: prefer `last_7_days` when present; otherwise use `today` counters.
+   - Contradictory mixed-window messaging is forbidden by design.
 - Produces concise bullet-point summaries directly from preprocessed payload fields.
 - Summary section is never model-generated.
 
-### Deterministic Interpretation Fallbacks ⚡ **(v0.1.1+, enhanced v0.1.4+)**
+### Deterministic Interpretation Fallbacks ⚡ **(v0.1.1+, enhanced v0.1.4+, unified window v0.1.5+)**
 - Route-specific interpretation fallback functions (no LLM):
   - `interpret_report_fallback(payload)` → condition-aware interpretation based on actual metrics.
   - `interpret_health_fallback(payload)` → health status interpretation.
@@ -150,7 +155,14 @@ All commands:
   - If errors > 0: explicitly mentions error presence and recommends investigation.
   - If data is thin (most counters zero/missing): acknowledges limited telemetry.
   - Only uses neutral language ("normal activity") when actually justified by data.
+   - Uses the shared selected-window helper (`select_report_window`) so fallback interpretation cannot diverge from summary/signals windows.
 - Produces 1-2 sentence operational interpretations directly from preprocessed data.
+
+### Deterministic Report Signal Rules ⚡ **(v0.1.5+)**
+
+- Report signals are derived from the shared selected report window only.
+- Hard contradiction rule: never emit `No download activity recorded` when selected-window downloads are greater than zero.
+- Report signals include mismatch detection when selected-window downloads exceed selected-window update checks.
 
 ### Fallback Formatters ⚡ **(v0.1.1+)**
 - Route-specific deterministic formatters (no LLM):

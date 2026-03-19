@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.1.5] — 2026-03-19
+
+### Changed (Unified Report Window Semantics)
+
+* **Single window selector for report logic**: Added `select_report_window(payload)` in `services/telemetry_preprocess.py` to enforce one shared selected window for report interpretation paths. The selector always prefers `last_7_days` when present and falls back to `today`.
+* **Summary/signals/interpretation alignment**: Refactored `build_report_summary()`, `build_report_signals()`, and `interpret_report_fallback()` to consume the shared selected window instead of independent extraction branches.
+* **Quality-gate alignment**: Refactored `SlashCog._quality_gate_interpretation()` (report route) to use the same selected-window logic via `select_report_window()`, removing duplicate window extraction logic in commands layer.
+* **Contradiction hardening rule implemented**: `build_report_signals()` now never emits `No download activity recorded` when selected-window downloads are greater than zero.
+* **Signal enrichment for mismatch detection**: Added deterministic report signal when selected-window downloads exceed selected-window update checks.
+
+### Added
+
+* New deterministic tests in `tests/test_report_logic.py` covering:
+  - 7-day downloads > 0 while today downloads = 0 (window preference and contradiction prevention)
+  - All-zero low-signal behavior
+  - Checks-only behavior
+  - Errors-present behavior
+  - Downloads > update checks behavior
+
+### Notes
+
+* Report output layer is now deterministic across Summary, Signals, fallback Interpretation, and report quality-gate checks with shared window semantics.
+* Command surface unchanged: `/report`, `/traffic`, `/errors`, `/health` remain the only commands.
+
 ## [0.1.4] — 2026-03-09
 
 ### Changed (Report Interpretation Grounding)

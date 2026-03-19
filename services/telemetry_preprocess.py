@@ -339,6 +339,46 @@ def preprocess_errors(data: dict[str, Any]) -> dict[str, Any]:
     return summary
 
 
+def select_report_window(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Select one report window for all report-layer logic.
+
+    Prefer last_7_days when present, otherwise fall back to today counters.
+    Returns a stable structure used by summary/signals/interpretation/quality gates.
+    """
+    last_7d = payload.get("last_7_days")
+    if isinstance(last_7d, dict) and any(v is not None for v in last_7d.values()):
+        return {
+            "label": "last_7_days",
+            "update_checks": _get_int_or_none(last_7d, "update_checks"),
+            "downloads": _get_int_or_none(last_7d, "downloads"),
+            "errors": _get_int_or_none(last_7d, "errors"),
+        }
+
+    update_checks_today = None
+    downloads_today = None
+    errors_today = None
+
+    update_checks = payload.get("update_checks")
+    if isinstance(update_checks, dict):
+        update_checks_today = _get_int_or_none(update_checks, "today")
+
+    downloads = payload.get("downloads")
+    if isinstance(downloads, dict):
+        downloads_today = _get_int_or_none(downloads, "today")
+
+    errors = payload.get("errors")
+    if isinstance(errors, dict):
+        errors_today = _get_int_or_none(errors, "today")
+
+    return {
+        "label": "today",
+        "update_checks": update_checks_today,
+        "downloads": downloads_today,
+        "errors": errors_today,
+    }
+
+
 # ── Fallback formatters (no LLM) ──────────────────────────────────────────────
 
 
@@ -354,35 +394,11 @@ def build_report_summary(payload: dict[str, Any]) -> list[str]:
     """
     bullets = []
     
-    # Prefer last_7_days data if present, otherwise fall back to today
-    last_7d = payload.get("last_7_days")
-    use_last_7d = isinstance(last_7d, dict) and any(
-        v is not None for v in last_7d.values()
-    )
-    
-    update_checks_val = None
-    downloads_val = None
-    errors_val = None
-    window_label = ""
-    
-    if use_last_7d:
-        update_checks_val = last_7d.get("update_checks")
-        downloads_val = last_7d.get("downloads")
-        errors_val = last_7d.get("errors")
-        window_label = " (7d)"
-    else:
-        # Fall back to today data
-        uc = payload.get("update_checks")
-        if isinstance(uc, dict):
-            update_checks_val = uc.get("today")
-        
-        dl = payload.get("downloads")
-        if isinstance(dl, dict):
-            downloads_val = dl.get("today")
-        
-        err = payload.get("errors")
-        if isinstance(err, dict):
-            errors_val = err.get("today")
+    selected = select_report_window(payload)
+    update_checks_val = selected["update_checks"]
+    downloads_val = selected["downloads"]
+    errors_val = selected["errors"]
+    window_label = " (7d)" if selected["label"] == "last_7_days" else ""
     
     # Always include available core counters
     if update_checks_val is not None:
@@ -492,34 +508,34 @@ def build_report_signals(payload: dict[str, Any]) -> list[str]:
     """Generated signals for report based on thresholds and movement."""
     signals = []
 
-    # Download presence signal
-    dl = payload.get("downloads")
-    if isinstance(dl, dict):
-        is_present = dl.get("present", False)
-        if not is_present:
+    selected = select_report_window(payload)
+    update_checks_val = selected["update_checks"]
+    downloads_val = selected["downloads"]
+    errors_val = selected["errors"]
+
+    # Hard rule: never emit "No download activity recorded" when downloads > 0.
+    if downloads_val is not None and downloads_val == 0:
             signals.append("No download activity recorded")
 
-    # Error presence signal
-    err = payload.get("errors")
-    if isinstance(err, dict):
-        is_present = err.get("present", False)
-        if is_present:
-            today = err.get("today")
-            signals.append(f"Recent error activity present ({today} errors)")
+    if errors_val is not None and errors_val > 0:
+        signals.append(f"Recent error activity present ({errors_val} errors)")
 
-    # Update check movement if significant
-    uc = payload.get("update_checks")
-    if isinstance(uc, dict):
-        change = uc.get("change", "")
-        if "↑" in change or "↓" in change:
-            # Only signal if significant (>25%)
-            if any(x in change for x in ["25%", "50%", "75%", "100%", "200%"]):
-                signals.append(f"Update check activity {change}")
+    if (
+        update_checks_val is not None
+        and downloads_val is not None
+        and downloads_val > update_checks_val
+    ):
+        signals.append("Downloads exceed update checks in selected window")
 
-    # Low-signal detection
-    last7 = payload.get("last_7_days_summary", "")
-    month = payload.get("month_to_date_summary", "")
-    if "no activity" in last7.lower() and "no activity" in month.lower():
+    counters_present = sum(
+        1 for v in [update_checks_val, downloads_val, errors_val] if v is not None
+    )
+    counters_nonzero = sum(
+        1
+        for v in [update_checks_val, downloads_val, errors_val]
+        if v is not None and v > 0
+    )
+    if counters_present == 0 or counters_nonzero == 0:
         signals.append("Baseline: significantly low signal across period")
 
     return signals
@@ -606,30 +622,10 @@ def interpret_report_fallback(payload: dict[str, Any]) -> str:
     Condition-aware: reflects actual data state (errors, downloads, update checks).
     Prefers combinations over generic fallback.
     """
-    # Extract key metrics (prefer last_7_days if available)
-    uc_today = None
-    dl_today = None
-    err_today = None
-    
-    last_7d = payload.get("last_7_days")
-    use_7d = isinstance(last_7d, dict) and any(v is not None for v in last_7d.values())
-    
-    if use_7d:
-        uc_today = last_7d.get("update_checks")
-        dl_today = last_7d.get("downloads")
-        err_today = last_7d.get("errors")
-    else:
-        uc = payload.get("update_checks")
-        if isinstance(uc, dict):
-            uc_today = uc.get("today")
-        
-        dl = payload.get("downloads")
-        if isinstance(dl, dict):
-            dl_today = dl.get("today")
-        
-        err = payload.get("errors")
-        if isinstance(err, dict):
-            err_today = err.get("today")
+    selected = select_report_window(payload)
+    uc_today = selected["update_checks"]
+    dl_today = selected["downloads"]
+    err_today = selected["errors"]
     
     # Low-signal detection
     counters_present = sum(1 for v in [uc_today, dl_today, err_today] if v is not None)

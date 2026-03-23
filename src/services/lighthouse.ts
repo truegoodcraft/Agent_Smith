@@ -4,12 +4,9 @@ import { Env } from '../types';
 import { LighthouseReport, isLighthouseReport } from '../types/telemetry';
 
 export class LighthouseError extends Error {
-  code: string;
-
-  constructor(message: string, code = 'REPORT_FETCH_FAILED') {
+  constructor(message: string) {
     super(message);
     this.name = 'LighthouseError';
-    this.code = code;
   }
 }
 
@@ -21,34 +18,9 @@ export class LighthouseError extends Error {
  */
 export async function getLighthouseReport(env: Env): Promise<LighthouseReport> {
   const url = env.LIGHTHOUSE_REPORT_URL;
-  const hasReportUrl = Boolean(url);
-  const hasAdminToken = Boolean(env.LIGHTHOUSE_ADMIN_TOKEN);
-
-  let safeReportUrl: string | null = null;
-  if (url) {
-    try {
-      const parsed = new URL(url);
-      safeReportUrl = `${parsed.origin}${parsed.pathname}`;
-    } catch {
-      safeReportUrl = 'INVALID_URL';
-    }
-  }
-
-  console.log('[report-debug] config', {
-    hasReportUrl,
-    reportUrlOriginPath: safeReportUrl,
-    hasAdminToken,
-  });
 
   if (!url) {
-    console.log('[report-debug] outcome', {
-      debugCode: 'REPORT_URL_MISSING',
-      statusCode: null,
-      statusText: null,
-      jsonParsingSucceeded: false,
-      payloadValidationSucceeded: false,
-    });
-    throw new LighthouseError('LIGHTHOUSE_REPORT_URL is not configured.', 'REPORT_URL_MISSING');
+    throw new LighthouseError('LIGHTHOUSE_REPORT_URL is not configured.');
   }
 
   let response: Response;
@@ -61,28 +33,12 @@ export async function getLighthouseReport(env: Env): Promise<LighthouseReport> {
       // For this packet, we keep it simple.
     });
   } catch {
-    console.log('[report-debug] outcome', {
-      debugCode: 'REPORT_FETCH_FAILED',
-      statusCode: null,
-      statusText: null,
-      jsonParsingSucceeded: false,
-      payloadValidationSucceeded: false,
-    });
-    throw new LighthouseError('Failed to fetch from Lighthouse service.', 'REPORT_FETCH_FAILED');
+    throw new LighthouseError('Failed to fetch from Lighthouse service.');
   }
 
   if (!response.ok) {
-    const debugCode = response.status === 401 ? 'REPORT_401' : 'REPORT_FETCH_FAILED';
-    console.log('[report-debug] outcome', {
-      debugCode,
-      statusCode: response.status,
-      statusText: response.statusText,
-      jsonParsingSucceeded: false,
-      payloadValidationSucceeded: false,
-    });
     throw new LighthouseError(
       `Lighthouse service returned an error: ${response.status} ${response.statusText}`,
-      debugCode,
     );
   }
 
@@ -90,27 +46,13 @@ export async function getLighthouseReport(env: Env): Promise<LighthouseReport> {
   try {
     data = await response.json();
   } catch {
-    console.log('[report-debug] outcome', {
-      debugCode: 'REPORT_INVALID_JSON',
-      statusCode: response.status,
-      statusText: response.statusText,
-      jsonParsingSucceeded: false,
-      payloadValidationSucceeded: false,
-    });
-    throw new LighthouseError('Lighthouse service returned invalid JSON.', 'REPORT_INVALID_JSON');
+    throw new LighthouseError('Lighthouse service returned invalid JSON.');
   }
 
   const payloadValidationSucceeded = isLighthouseReport(data);
-  console.log('[report-debug] outcome', {
-    debugCode: payloadValidationSucceeded ? 'REPORT_OK' : 'REPORT_INVALID_PAYLOAD',
-    statusCode: response.status,
-    statusText: response.statusText,
-    jsonParsingSucceeded: true,
-    payloadValidationSucceeded,
-  });
 
   if (!payloadValidationSucceeded) {
-    throw new LighthouseError('Invalid or malformed payload received from Lighthouse service.', 'REPORT_INVALID_PAYLOAD');
+    throw new LighthouseError('Invalid or malformed payload received from Lighthouse service.');
   }
 
   return data as LighthouseReport;

@@ -2,9 +2,11 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.5.5 — Deterministic report presentation)
+## Current Mission (v0.5.6 — Report readability polish)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+`/report` output remains deterministic with the same data sections (`selected window`, `today`, `read`, `trend`) and now uses cleaner labels (`Read`, `Trend`, and `Report · OK · <window>` status text).
 
 This is a full rewrite path, not a preservation path for the previous Python implementation.
 

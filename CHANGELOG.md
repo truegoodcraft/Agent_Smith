@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.6] — 2026-03-23
+
+### Changed
+
+*   **`/report` readability polish**: Updated `src/logic/report.ts` labels to improve Discord readability while preserving the same sections and data. Renamed `Deterministic read` to `Read`, `Deterministic trend` to `Trend`, and status line text to `Report · OK · <window>`.
+*   **Temporary report diagnostics removed**: Removed temporary report debug logging from `src/services/lighthouse.ts` and removed user-visible debug codes from `/report` error responses in `src/commands/report.ts`.
+
 ## [0.5.5] — 2026-03-23
 
 ### Changed

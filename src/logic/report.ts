@@ -110,8 +110,8 @@ function formatCounters(label: string, counters: ReportWindow): string {
  */
 export function formatReport(report: SelectedReport): string {
   const statusLine = report.windowLabel === '7d'
-    ? 'Status: OK | Window: 7d selected'
-    : 'Status: OK | Window: today selected';
+    ? 'Report · OK · 7d'
+    : 'Report · OK · today';
 
   const selectedLabel = report.windowLabel === '7d' ? 'Selected window (7d)' : 'Selected window (today)';
   const selectedBlock = formatCounters(selectedLabel, report.selected);
@@ -132,10 +132,10 @@ export function formatReport(report: SelectedReport): string {
     '',
     todayBlock,
     '',
-    '**Deterministic read**',
+    '**Read**',
     deterministicRead,
     '',
-    '**Deterministic trend**',
+    '**Trend**',
     deterministicTrend,
   ].join('\n');
 }

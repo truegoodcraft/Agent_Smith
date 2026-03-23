@@ -1,14 +1,7 @@
 import { APIApplicationCommandInteraction, APIInteractionResponse, InteractionResponseType } from 'discord-api-types/v10';
 import { Command, Env } from '../types';
-import { getLighthouseReport, LighthouseError } from '../services/lighthouse';
+import { getLighthouseReport } from '../services/lighthouse';
 import { formatReport, selectReportWindow } from '../logic/report';
-
-function getReportDebugCode(error: unknown): string {
-  if (error instanceof LighthouseError) {
-    return error.code;
-  }
-  return 'REPORT_FETCH_FAILED';
-}
 
 async function handle(interaction: APIApplicationCommandInteraction, env: Env): Promise<APIInteractionResponse> {
   try {
@@ -22,14 +15,12 @@ async function handle(interaction: APIApplicationCommandInteraction, env: Env): 
         content: reportContent,
       },
     };
-  } catch (e) {
-    const debugCode = getReportDebugCode(e);
-    // TODO: In the future, log the full error `e` to a real logging service.
-    // The original error message is preserved in `e` but not shown to the user.
+  } catch {
+    // TODO: In the future, log the full error to a real logging service.
     return {
       type: InteractionResponseType.ChannelMessageWithSource,
       data: {
-        content: `Could not retrieve the report at this time. (${debugCode})`,
+        content: 'Could not retrieve the report at this time.',
         flags: 64, // Ephemeral
       },
     };

@@ -1,6 +1,6 @@
 {
   "name": "agent_smith",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Agent Smith is a Cloudflare-native, deterministic, personal-use watcher.",
   "main": "dist/index.js",
   "scripts": {

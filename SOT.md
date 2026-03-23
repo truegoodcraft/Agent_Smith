@@ -2,7 +2,7 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.5.1 — Scope-corrected MVP)
+## Current Mission (v0.5.2 — Dead-code removal)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
 
@@ -36,10 +36,6 @@ This is a full rewrite path, not a preservation path for the previous Python imp
 | :--------- | :------- | :----------------------- | :------------------------------- |
 | `/health`  | Live     | None (static)            | Confirms Worker + DO operational |
 | `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Compact telemetry report         |
-| `/traffic` | Deferred | —                        | Not implemented in MVP           |
-| `/errors`  | Deferred | —                        | Not implemented in MVP           |
-
-`/traffic` and `/errors` have no active handlers, services, types, or logic in the runtime. They are planned for a future pass once Lighthouse backend contracts are stable.
 
 See `CONTRACTS.md` for detailed command contracts.
 

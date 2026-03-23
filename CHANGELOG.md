@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.2] — 2026-03-22
+
+### Removed
+
+*   **Deleted orphaned command files**: Removed `src/commands/traffic.ts` and `src/commands/errors.ts` which were left behind in v0.5.1 scope correction. No active code referenced them.
+*   **`/traffic` and `/errors` removed from SOT operator surface table**: These deferred entries and accompanying note are no longer listed.
+
+### Changed
+
+*   **SOT.md**: Operator surface now lists only `/health` and `/report`.
+
 ## [0.5.1] — 2026-03-22
 
 ### Removed (Scope Correction)

@@ -1,0 +1,19 @@
+# This is an example file for local development variables.
+# Copy this to .dev.vars and fill in your actual secrets.
+# IMPORTANT: .dev.vars is gitignored and should NEVER be committed.
+
+# --- Runtime Secrets (Required for the Worker to run) ---
+# Used to verify incoming webhook requests from Discord.
+DISCORD_PUBLIC_KEY="your_discord_public_key"
+# The backend admin token for fetching telemetry.
+LIGHTHOUSE_ADMIN_TOKEN="your_admin_token"
+
+# --- Lighthouse Endpoint URLs ---
+# Set these to your actual Lighthouse backend URLs.
+# /report endpoint (required for /report command)
+LIGHTHOUSE_REPORT_URL="https://your-lighthouse-instance/api/report"
+
+# --- Management/Deployment Secrets (Not required for runtime, but for setup) ---
+# Required for the one-time action of registering/updating slash commands with Discord.
+DISCORD_APPLICATION_ID="your_discord_application_id"
+DISCORD_BOT_TOKEN="your_discord_bot_token"

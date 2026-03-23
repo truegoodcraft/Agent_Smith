@@ -2,455 +2,101 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.1.6+)
+## Current Mission (v0.5.1 — Scope-corrected MVP)
 
-Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed, read-only backend telemetry. It retrieves backend metrics, preprocesses them into operator-focused summaries in Python, and delivers structured operator responses assembled in Python. `/report` is deterministic-only and never calls Ollama; it renders only Summary and Interpretation from selected-window counters (`update_checks`, `downloads`, `errors`). Non-report routes may still use optional model-generated interpretation.
+Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+This is a full rewrite path, not a preservation path for the previous Python implementation.
+
+## Core Architecture
+
+1.  **Discord Interaction:** Discord sends a slash-command interaction to a Cloudflare Worker HTTP endpoint.
+2.  **Signature Verification:** The Worker verifies the incoming request signature using the application's public key (`DISCORD_PUBLIC_KEY`).
+3.  **Durable Object Routing:** The Worker routes the validated interaction to a singleton Durable Object (`SmithDO`).
+4.  **Single-Threaded Orchestration:** The DO acts as a single-threaded "command brain", ensuring commands are processed one at a time.
+5.  **Service Fetch:** Dedicated service functions (`src/services/lighthouse.ts`) fetch validated telemetry from Lighthouse backend endpoints.
+6.  **Deterministic Logic:** Stateless logic modules (`src/logic/`) apply fixed interpretation rules to produce compact, operator-grade output.
+7.  **Response to Discord:** The Worker returns the final deterministic response.
 
 ## Core Invariants
 
-1. **Stateless invariant**
-   - Each operator command is independent and carries no conversation state.
-   - No message history, no reset flow, no previous-message lookup.
-   - Each `/report`, `/traffic`, `/errors`, `/health` call is a fresh backend request, preprocessing, and (optionally) analysis cycle.
-
-2. **Read-only invariant**
-   - Agent Smith only retrieves and analyzes telemetry. It does not mutate backend state.
-   - No write, delete, or configuration-change actions are exposed.
-   - No arbitrary command execution is permitted.
-
-3. **Fixed-endpoint invariant**
-   - The four slash commands call exactly four fixed backend routes, configured via environment variables.
-   - Routes cannot be dynamically specified by users.
-   - Each route is validated for HTTPS, whitelisted host, and proper JSON response.
-
-4. **Validation-before-analysis invariant**
-   - Backend responses are validated (HTTP status, content type, JSON parse, payload size) before any LLM usage.
-   - Invalid responses fail clearly with a concise human-readable error, not LLM hallucination.
-   - Sensitive fields (tokens, secrets, auth headers, cookies) are redacted before any downstream processing.
-
-5. **Deterministic-first invariant** ⚡ **(v0.1.1+)**
-   - Raw backend JSON is never sent directly to Ollama.
-   - Each route applies route-specific Python preprocessing to extract only relevant fields, normalize structures, and compute deterministic derived values (day-over-day deltas, availability checks, health signals).
-   - Preprocessing never invents missing data; unavailable fields are marked explicitly.
-   - The model receives only compact operator-facing preprocessed payloads, never raw backend schema.
-
-6. **Fallback-first invariant** ⚡ **(v0.1.1+)**
-   - If Ollama fails (times out, is unreachable, or returns an error), Smith still returns useful deterministic output.
-   - If model output fails quality gates (too long, contains banned phrases, lacks required sections), deterministic fallback is used instead.
-   - Backend success + model failure always yields a useful operator response; model is enhancement, not single point of failure.
-
-7. **Formatter-first invariant** ⚡ **(v0.1.2+)**
-   - Final Discord response is composed entirely in Python, not by model output.
-   - Summary and Signals sections are 100% deterministic, computed directly from preprocessed payload fields.
-   - Interpretation section is optional model-generated content; if unavailable or weak, fallback interpretation is used.
-   - All response structure (title, sections, bullets, formatting) is under operator control in Python code.
-   - No raw telemetry JSON is shown to Discord users in normal success responses.
-   - Internal scaffolding (section headers, field names, payload dumps) never leaks to operators.
-   - **Report format constraint** ⚡ **(v0.1.6+)**: `/report` outputs only `Summary` and `Interpretation` sections.
-
-8. **Report deterministic-only invariant** ⚡ **(v0.1.6+)**
-   - `/report` must never call Ollama.
-   - `/report` interpretation must be deterministic and derived only from selected-window values: `update_checks`, `downloads`, `errors`.
-   - `/report` uses no generated prose and no speculative signals.
-   - Selected-window policy remains fixed: prefer `last_7_days` when present, otherwise `today`.
-
-9. **Quality gate invariant** ⚡ **(v0.1.2+, enhanced v0.1.4+, unified v0.1.5+)**
-   - Model interpretation output is validated before use:
-     - Max 500 characters.
-     - Must not contain patterns: `section:`, `sanitized telemetry`, `route:`, `summary:`, `signals:`, etc.
-     - Must not contain generic analytics language or schema discussion.
-    - **Grounding heuristic** ⚡ **(v0.1.4+, unified window v0.1.5+)**: For report route, model output is rejected if too generic compared to actual data:
-     - If downloads == 0, model must mention limited/no activity (e.g., "no download", "limited activity", "thin").
-     - If errors > 0, model must mention errors/issues/problems.
-     - If low-signal (most counters zero/missing), model must not sound overly confident (no "normal", "healthy", "active").
-    - For report route, grounding checks use the same selected report window as summary/signals/fallback interpretation (`select_report_window()`), preventing cross-window contradictions.
-   - If output fails gates or grounding checks, deterministic fallback interpretation is used instead.
-
-10. **Security invariant**
-   - All backend URLs must be HTTPS.
-   - All backend hosts must be in `BACKEND_ALLOWED_HOSTS` allowlist.
-   - All requests use explicit timeout (`BACKEND_TIMEOUT_SECONDS`).
-   - Payloads are bounded (`BACKEND_MAX_RESPONSE_BYTES`).
-   - Auth tokens are environment-configured, never hardcoded or user-supplied.
-
-11. **Freeform-message prohibition invariant**
-   - Normal Discord messages do not trigger AI chat responses.
-   - If received, normal messages get a brief redirect to slash commands.
-   - No LLM-chat path exists for freeform text.
+1.  **Cloudflare-Native:** The entire service runs on Cloudflare's network. No Python runtime, Docker dependency, or local server in production.
+2.  **Stateless Invariant:** Each operator command is independent. The DO does not persist state in v1; it is only a single-threaded execution orchestrator.
+3.  **Read-only Invariant:** Agent Smith only retrieves and analyzes telemetry. It does not mutate backend state.
+4.  **Deterministic-Only Invariant:** All command outputs are deterministic and derived directly from fetched telemetry. No LLM/model path, no speculative language, no "AI" layer.
+5.  **Fixed-Endpoint Invariant:** Active slash commands call fixed backend routes configured via Cloudflare environment variables and secrets.
+6.  **Security Invariant:**
+    -   Discord interaction signatures are verified for all incoming requests.
+    -   Secrets are managed via the Cloudflare dashboard (production) or `.dev.vars` (local) and are never committed to the repository.
+7.  **Webhook-Based Interaction:** The bot uses Discord's HTTP-based Interactions, not the persistent Gateway WebSocket connection.
 
 ## Operator Surface
 
-Exactly four slash commands:
+| Command    | Status   | Backend                  | Description                      |
+| :--------- | :------- | :----------------------- | :------------------------------- |
+| `/health`  | Live     | None (static)            | Confirms Worker + DO operational |
+| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Compact telemetry report         |
+| `/traffic` | Deferred | —                        | Not implemented in MVP           |
+| `/errors`  | Deferred | —                        | Not implemented in MVP           |
 
-| Command | Backend Route | Purpose |
-|---------|---------------|----------|
-| `/report` | `LIGHTHOUSE_REPORT_URL` | Fetch and analyze telemetry report |
-| `/traffic` | `LIGHTHOUSE_TRAFFIC_URL` | Fetch and analyze traffic telemetry |
-| `/errors` | `LIGHTHOUSE_ERRORS_URL` | Fetch and analyze error telemetry |
-| `/health` | `LIGHTHOUSE_HEALTH_URL` | Fetch and analyze health telemetry |
+`/traffic` and `/errors` have no active handlers, services, types, or logic in the runtime. They are planned for a future pass once Lighthouse backend contracts are stable.
 
-All commands:
-- Respect Discord channel/user allow-lists (`ALLOWED_CHANNEL_IDS`, `ALLOWED_USER_IDS`).
-- Are subject to rate limiting (`RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW`).
-- Log operator actions with user ID, channel ID, command, route label, and HTTP status.
+See `CONTRACTS.md` for detailed command contracts.
 
-## Backend Integration Architecture
+## Deployment
 
-### `services/backend_client.py`
-- Read-only async HTTP client for approved telemetry endpoints.
-- Enforces HTTPS, host allowlist, request timeout, payload size bounds.
-- Returns normalized result structure:
-  ```python
-  {
-    "ok": bool,
-    "status_code": int | None,
-    "url": str,
-    "error": str | None,
-    "json": dict | None,
-    "raw_text": str | None,
-    "content_type": str | None,
-  }
-  ```
+-   **Production:** GitHub Actions → Cloudflare via `wrangler-action`. See `.github/workflows/deploy.yml`.
+-   **Gate:** CI workflow runs type-check + governance checks before deploy.
+-   **Local:** `npm start` → `wrangler dev` with `.dev.vars` for secrets/URLs.
+-   **No local-machine dependency** for production deployment.
 
-### `services/telemetry_validation.py`
-- Validates HTTP status, content type (must contain `application/json`), JSON parse success, payload size.
-- Redacts sensitive keys: `authorization`, `token`, `access_token`, `api_key`, `secret`, `password`, `cookie`, `set-cookie`.
-- Returns validation result and sanitized JSON (or error description).
+## Configuration & Secrets Contract
 
-### `services/telemetry_preprocess.py` ⚡ **(v0.1.1+)**
-- Route-specific preprocessing functions:
-  - `preprocess_report(data)` → operator summary with update checks, downloads, errors, and 7-day/month trends.
-  - `preprocess_health(data)` → health status, component status, overall health signal.
-  - `preprocess_traffic(data)` → total requests, top routes, and latency percentiles.
-  - `preprocess_errors(data)` → error counts, top error types, and severity distribution.
-- Each preprocessor:
-  - Extracts only relevant fields from raw backend JSON.
-  - Computes deterministic derived values (day-over-day deltas, availability checks, threshold checks).
-  - Marks absent fields explicitly (e.g., `[not present in payload]`) instead of inventing data.
-  - Returns compact operator-facing dict.
-- No business logic; only extraction and simple math.
-- **Report preprocessing enhancement** ⚡ **(v0.1.3+)**: `preprocess_report()` now extracts actual counter values from `last_7_days` payload for use by summary builder, providing richer window-based reporting when available.
+### GitHub Secrets (required for deployment)
 
-### Deterministic Summary Builders ⚡ **(v0.1.3+, unified window v0.1.5+)**
-- Route-specific summary builders (100% Python):
-  - `build_report_summary(payload)` → deterministic summary bullets with core counters.
-  - `build_health_summary(payload)` → health status and component status.
-  - `build_traffic_summary(payload)` → request volume and latency metrics.
-  - `build_errors_summary(payload)` → error counts and top types.
-- **Report summary strengthening** ⚡ **(v0.1.3+)**:
-  - Summary builder prefers `last_7_days` data when available, falls back to `today` data.
-  - Always includes available core counters: update checks, downloads, errors.
-  - Adds deterministic low-signal detection: "Telemetry is low-signal in this window." when most counters are zero or missing.
-  - Window label `(7d)` is appended when displaying 7-day data.
-- **Shared window contract** ⚡ **(v0.1.5+)**:
-   - Report summary, report signals, report fallback interpretation, and report quality-gate grounding all derive counters from one helper: `select_report_window(payload)`.
-   - Selection policy is fixed: prefer `last_7_days` when present; otherwise use `today` counters.
-   - Contradictory mixed-window messaging is forbidden by design.
-- Produces concise bullet-point summaries directly from preprocessed payload fields.
-- Summary section is never model-generated.
+| Secret                    | Purpose                           |
+| :------------------------ | :-------------------------------- |
+| `CLOUDFLARE_API_TOKEN`    | Wrangler deployment auth          |
+| `CLOUDFLARE_ACCOUNT_ID`   | Cloudflare account target         |
+| `DISCORD_PUBLIC_KEY`      | Pushed to CF as Worker secret     |
+| `DISCORD_APPLICATION_ID`  | Pushed to CF as Worker secret     |
+| `DISCORD_BOT_TOKEN`       | Pushed to CF as Worker secret     |
+| `LIGHTHOUSE_ADMIN_TOKEN`  | Pushed to CF as Worker secret     |
 
-### Deterministic Interpretation Fallbacks ⚡ **(v0.1.1+, enhanced v0.1.4+, unified window v0.1.5+, report strict v0.1.6+)**
-- Route-specific interpretation fallback functions (no LLM):
-  - `interpret_report_fallback(payload)` → condition-aware interpretation based on actual metrics.
-  - `interpret_health_fallback(payload)` → health status interpretation.
-  - `interpret_traffic_fallback(payload)` → traffic pattern interpretation.
-  - `interpret_errors_fallback(payload)` → error condition interpretation.
-- Used when model fails, times out, or output fails quality gates.
-- **Report interpretation contract** ⚡ **(v0.1.6+)**:
-   - Uses shared selected-window helper (`select_report_window`) and only selected-window counters.
-   - Emits compact deterministic state output instead of generated prose.
-   - No speculative language; no model fallback path for `/report`.
-- Non-report routes may still produce brief model or deterministic fallback interpretations.
+### Cloudflare Runtime Secrets (set via dashboard or wrangler secret)
 
-### Deterministic Report Signal Rules ⚡ **(v0.1.5+)**
+| Secret                   | Purpose                                    |
+| :----------------------- | :----------------------------------------- |
+| `DISCORD_PUBLIC_KEY`     | Verify incoming Discord webhook signatures |
+| `LIGHTHOUSE_ADMIN_TOKEN` | Authenticate with Lighthouse backend       |
+| `DISCORD_APPLICATION_ID` | Discord app ID (setup/management)          |
+| `DISCORD_BOT_TOKEN`      | Register/update slash commands             |
 
-- Report signals are derived from the shared selected report window only.
-- Hard contradiction rule: never emit `No download activity recorded` when selected-window downloads are greater than zero.
-- Report signals include mismatch detection when selected-window downloads exceed selected-window update checks.
-- `/report` presentation layer (v0.1.6+) does not render a Signals section.
+### Environment Variables (wrangler.toml `[vars]`)
 
-### Fallback Formatters ⚡ **(v0.1.1+)**
-- Route-specific deterministic formatters (no LLM):
-  - `format_report_fallback(payload)` → concise bullet-point report summary.
-  - `format_health_fallback(payload)` → health status and degraded components.
-  - `format_traffic_fallback(payload)` → request counts and latency summary.
-  - `format_errors_fallback(payload)` → error counts and top error types.
-- Used when model fails, times out, or output fails quality gates.
-- Produces operator-readable output directly from preprocessed data.
+| Variable                | Purpose                        |
+| :---------------------- | :----------------------------- |
+| `LIGHTHOUSE_REPORT_URL` | Lighthouse report endpoint     |
 
-### `services/alert_intake.py`
-- Minimal placeholder data shape for future backend-originated alert intake.
-- No webhook server or runtime intake is currently implemented.
+### Local Development (.dev.vars)
 
-## Operator Workflow (v0.1.2+)
+Template: `.dev.vars.example`. Copy to `.dev.vars` and fill in values.
 
-1. User invokes slash command (e.g., `/report`).
-2. Permission check (channel/user allow-lists).
-3. Rate-limit check.
-4. Backend call via `BackendClient.get_<route>()`.
-5. Response validation via `validate_and_sanitize()`.
-6. If valid:
-   - **Deterministic preprocessing** (Python): Apply route-specific preprocessing to extract compact operator summary.
-   - **Build Summary section** (100% Python): Extract key metrics from preprocessed payload.
-   - **Build Signals section** (100% Python): Generate anomaly/threshold signals from payload fields.
-   - **Optional model call** (Ollama): Request brief interpretation (1–3 sentences, no bullets/headings).
-   - **Quality gate interpretation**: Reject if >500 chars or contains internal scaffolding.
-   - **Build Interpretation section** (Python): Use model interpretation if available, otherwise fallback deterministic.
-   - **Assemble final response** (Python): Combine title, summary, signals, interpretation into clean Discord message.
-   - **Send to Discord**: No raw JSON, no internal labels, no model scaffolding.
-7. If invalid:
-   - Return concise failure report (route, HTTP status, parse state, exact error).
-   - No speculative analysis.
+## Governance
 
-## Response Format (v0.1.2+)
-
-Final Discord responses are formatted as:
-
-```
-Route · HTTP status
-
-**Summary**
-· metric 1
-· metric 2
-
-**Signals**
-· signal 1
-· signal 2
-
-**Interpretation**
-Brief operational interpretation (1–3 sentences, model-generated or deterministic fallback).
-```
-
-Key properties:
-- Title line shows route and HTTP status only.
-- Summary bullets show key metrics directly from payload (no model involvement).
-- Signals bullets show anomalies based on thresholds and deltas (no model involvement).
-- Interpretation is optional brief model output or deterministic fallback.
-- Only sections with content are shown.
-- No raw telemetry JSON.
-- No internal labels like `Route:`, `Sanitized telemetry`, `Section:`.
-- No repeated headings or duplicate sections.
-
-## Response Format Legacy (v0.1.1+)
-
-All operator responses must be concise and structured:
-
-- **Summary**: 2–4 bullet points maximum. Key metrics and status.
-- **Signals**: 1–4 bullet points maximum. Notable anomalies or deviations. Omit if none.
-- **Interpretation**: Max 3 sentences. Operational context or meaning.
-- **Limits**: 1 sentence only if data is thin, ambiguous, or incomplete. Omit if not applicable.
-
-Forbidden in all responses:
-- Schema narration (describing input field names or structure).
-- Generic analytics language (e.g., "convergence ratio", invented metrics).
-- Repeating input data verbatim.
-- Essay formatting, numbered lists, or excessive structure.
-- Mentioning fields or metrics not present in the payload.
-- Filler or empty sections.
-
-## Configuration Requirements
-
-All backend URLs and auth are environment-configured:
-
-- `LIGHTHOUSE_REPORT_URL` (required, must be HTTPS)
-- `LIGHTHOUSE_TRAFFIC_URL` (required, must be HTTPS)
-- `LIGHTHOUSE_ERRORS_URL` (required, must be HTTPS)
-- `LIGHTHOUSE_HEALTH_URL` (required, must be HTTPS)
-- `LIGHTHOUSE_ADMIN_TOKEN` (required)
-- `BACKEND_ALLOWED_HOSTS` (required, comma-separated hostnames, empty = reject all)
-- `BACKEND_TIMEOUT_SECONDS` (default 10)
-- `BACKEND_MAX_RESPONSE_BYTES` (default 200000)
-- `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT` (for LLM analysis)
-- `ALLOWED_CHANNEL_IDS`, `ALLOWED_USER_IDS` (optional, empty = allow all)
-- `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW` (optional rate limiting)
-
-Missing required env vars cause startup failure.
-
-## Goals and Non-Goals
-
-### Goals
-- Provide operators a trusted, auditable interface to backend telemetry.
-- Enforce security by architecture (HTTPS, allowlist, validation, redaction).
-- Fail safely and clearly when backend response is invalid.
-- Log all operator actions for audit trail.
-- Produce concise, deterministic, operator-focused output with or without LLM.
-- Never fail uselessly; backend success always yields useful response.
-
-### Non-Goals
-- General-purpose chat assistance.
-- Arbitrary command execution (shell, HTTP, etc.).
-- Autonomous tool selection.
-- Conversation history or state.
-- User-supplied backend URLs or dynamic routing.
-- Write or mutation actions.
-
-## Known Limitations and Unresolved Assumptions
-
-1. **Auth header format**: Currently sends both `Authorization: Bearer <token>` and `X-Admin-Token: <token>`. Confirm which header(s) your backend expects.
-2. **Endpoint paths**: `LIGHTHOUSE_*_URL` values are examples. Confirm actual backend endpoint paths before production deployment.
-3. **Response structure**: Assumes backend returns JSON objects (not root arrays). Root arrays are wrapped as `{"data": [...]}`.
-4. **Token auth refresh**: No automatic token refresh or multi-credential support.
-5. **Alert intake**: Placeholder only; no webhook server, no background processing.
-6. **Model variation**: Fallback formatters are deterministic and operator-useful even if the configured model produces substandard output or is unavailable. Consider deploying with good model selection (e.g., `llama3`, `mistral`, or equivalent) for consistently useful LLM analysis.
-
-## Architectural Constraints
-
-- **No message-history storage**: Each operator command is independent.
-- **No prompt injection surface**: Backend data is always validated, redacted, and preprocessed before reaching Ollama.
-- **No background processing**: All operations are synchronous slash-command request → response cycles.
-- **No access to other Discord features**: Agent Smith is read-only Discord message monitoring + slash command responder.
-- **Preprocessing is deterministic and lightweight**: No async I/O, no external calls, no state mutation during preprocessing.
+-   `scripts/check-governance.mjs` — run via `npm run check:governance`
+-   Enforces: VERSION↔CHANGELOG alignment, command↔CONTRACTS coverage, `.dev.vars.example` existence, no legacy imports in `src/`, SOT version reference.
+-   Runs in CI on every push/PR and as a gate before deploy.
 
 ---
-
-## SoT Deltas (Historical Reference Only)
-
-### SOT Delta — v0.1.2 Phase 4 Formatter-First Response Architecture
-
-⚡ Complete shift to formatter-first, model-optional design:
-- Added Python-based response builders: `build_report_summary()`, `build_health_summary()`, `build_traffic_summary()`, `build_errors_summary()` (and corresponding signals builders).
-- Added Python-based interpretation fallbacks: `interpret_report_fallback()`, `interpret_health_fallback()`, `interpret_traffic_fallback()`, `interpret_errors_fallback()`.
-- Final Discord response is now assembled entirely in Python, never by model output. Summary and signals sections are 100% deterministic.
-- Model role reduced to optional interpretation generation only: 1–3 sentences max, no bullets, no headings, no schema discussion.
-- Removed raw sanitized telemetry JSON from Discord operator output; internal data only.
-- Quality gate strengthened: model interpretation is max 500 chars and explicitly rejects patterns like `section:`, `sanitized telemetry`, `route:`, etc.
-- New response format: `Route · HTTP status | Summary | Signals | Interpretation`. Only sections with content are shown.
-- Model is now a true optional enhancement; deterministic output is complete and useful without it.
-
-### SOT Delta — v0.1.1 Phase 3 Operator Output Quality
-
-⚡ Deterministic preprocessing and fallback:
-- Added `services/telemetry_preprocess.py` with route-specific preprocessing (extract, normalize, compute derived values only).
-- Raw backend JSON no longer sent to Ollama; model receives only compact operator payloads.
-- Added fallback deterministic formatters for all routes; backend success always yields useful response even if model fails.
-- Added quality gates (length, banned phrases, required sections); low-quality output triggers fallback.
-- System prompt tightened to require strict output structure and prohibit schema narration and field invention.
-- Response format is now concise and structured (Summary, Signals, Interpretation, Limits) with explicit prohibitions on filler.
-
-### SOT Delta — v0.1.0 Phase 2 Telemetry Operator Bridge
-
-- Replaced general-purpose chat bridge with narrow, fixed-endpoint telemetry operator bridge.
-- Removed freeform message handling; normal messages now redirect to slash commands.
-- Replaced dynamic `/ask` with four fixed commands: `/report`, `/traffic`, `/errors`, `/health`.
-- Introduced `services/backend_client.py` for fixed-endpoint, HTTPS-enforced, host-allowlisted telemetry calls.
-- Introduced `services/telemetry_validation.py` for response validation and sensitive-key redaction.
-- Added `services/alert_intake.py` as minimal placeholder foundation for future alert intake.
-- All backend URLs and tokens are environment-configured; no user-supplied routing.
-- Operator actions are logged with structured metadata (user, channel, command, route, HTTP status).
-- Invalid backend responses fail clearly without hallucination.
-
-### Original Historical Deltas
-
-(See archived CHANGELOG.md entries for v0.0.4, v0.0.5, v0.0.8 detailed memory and compaction architecture. These are superseded by v0.1.0 stateless telemetry model.)
-
-## SOT Delta — v0.0.8 Stateless Architecture Simplification
-
-- Converted to pure stateless request/response bridge. One message = one LLM inference. No state retained between messages.
-- Removed memory compaction system, structured summarizer, message history buffers, rolling context, and reset markers.
-- Removed background compaction tasks, per-channel locks, message counters, and threshold logic.
-- Removed Discord summary channel integration and auto-channel editing.
-- Removed `/reset` and `/memory status` slash commands.
-- Removed all memory-related configuration settings (`MAX_CONTEXT_PAIRS`, `MEMORY_*`).
-- Prompt format is now fixed: system = "You are Agent Smith. Provide direct, concise answers." + user message only.
-- Updated Product Invariants: fast-path chat invariant is now `User message → Ollama → streamed Discord response` with no history step.
-
-### `services/alert_intake.py`
-- Minimal placeholder data shape for future backend-originated alert intake.
-- No webhook server or runtime intake is currently implemented.
-
-## Operator Workflow
-
-1. User invokes slash command (e.g., `/report`).
-2. Permission check (channel/user allow-lists).
-3. Rate-limit check.
-4. Backend call via `BackendClient.get_<route>()`.
-5. Response validation via `validate_and_sanitize()`.
-6. If valid:
-   - Construct telemetry JSON summary.
-   - Send to Ollama with strict telemetry-analysis system prompt.
-   - Return analysis (summary, notable signals, interpretation, confidence limits).
-7. If invalid:
-   - Return concise failure report (route, HTTP status, parse state, exact error).
-   - No speculative analysis.
-
-## Configuration Requirements
-
-All backend URLs and auth are environment-configured:
-
-- `LIGHTHOUSE_REPORT_URL` (required, must be HTTPS)
-- `LIGHTHOUSE_TRAFFIC_URL` (required, must be HTTPS)
-- `LIGHTHOUSE_ERRORS_URL` (required, must be HTTPS)
-- `LIGHTHOUSE_HEALTH_URL` (required, must be HTTPS)
-- `LIGHTHOUSE_ADMIN_TOKEN` (required)
-- `BACKEND_ALLOWED_HOSTS` (required, comma-separated hostnames, empty = reject all)
-- `BACKEND_TIMEOUT_SECONDS` (default 10)
-- `BACKEND_MAX_RESPONSE_BYTES` (default 200000)
-- `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT` (for LLM analysis)
-- `ALLOWED_CHANNEL_IDS`, `ALLOWED_USER_IDS` (optional, empty = allow all)
-- `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW` (optional rate limiting)
-
-Missing required env vars cause startup failure.
-
-## Goalsand Non-Goals
-
-### Goals
-- Provide operators a trusted, auditable interface to backend telemetry.
-- Enforce security by architecture (HTTPS, allowlist, validation, redaction).
-- Fail safely and clearly when backend response is invalid.
-- Log all operator actions for audit trail.
-- Use LLM only after successful validation to generate concise operator-focused analysis.
-
-### Non-Goals
-- General-purpose chat assistance.
-- Arbitrary command execution (shell, HTTP, etc.).
-- Autonomous tool selection.
-- Conversation history or state.
-- User-supplied backend URLs or dynamic routing.
-- Write or mutation actions.
-
-## Known Limitations and Unresolved Assumptions
-
-1. **Auth header format**: Currently sends both `Authorization: Bearer <token>` and `X-Admin-Token: <token>`. Confirm which header(s) your backend expects.
-2. **Endpoint paths**: `LIGHTHOUSE_*_URL` values are examples. Confirm actual backend endpoint paths before production deployment.
-3. **Response structure**: Assumes backend returns JSON objects (not root arrays). Root arrays are wrapped as `{"data": [...]}`.
-4. **Token auth refresh**: No automatic token refresh or multi-credential support.
-5. **Alert intake**: Placeholder only; no webhook server, no background processing.
-
-## Architectural Constraints
-
-- **No message-history storage**: Each operator command is independent.
-- **No prompt injection surface**: Backend data is always validated and redacted before reaching Ollama.
-- **No background processing**: All operations are synchronous slash-command request → response cycles.
-- **No access to other Discord features**: Agent Smith is read-only Discord message monitoring + slash command responder.
-
 ---
 
-## SoT Deltas (Historical Reference Only)
+## SOT Deltas (Historical Reference Only)
 
-### SOT Delta — v0.1.0 Phase 2 Telemetry Operator Bridge
+**The v0.1.x Python-based architecture is fully deprecated as of v0.2.2. All related source files have been moved to the `legacy/` directory for historical reference and are no longer part of the active system.**
 
-- Replaced general-purpose chat bridge with narrow, fixed-endpoint telemetry operator bridge.
-- Removed freeform message handling; normal messages now redirect to slash commands.
-- Replaced dynamic `/ask` with four fixed commands: `/report`, `/traffic`, `/errors`, `/health`.
-- Introduced `services/backend_client.py` for fixed-endpoint, HTTPS-enforced, host-allowlisted telemetry calls.
-- Introduced `services/telemetry_validation.py` for response validation and sensitive-key redaction.
-- Added `services/alert_intake.py` as minimal placeholder foundation for future alert intake.
-- All backend URLs and tokens are environment-configured; no user-supplied routing.
-- Operator actions are logged with structured metadata (user, channel, command, route, HTTP status).
-- Invalid backend responses fail clearly without hallucination.
+(Previous entries related to the v0.1.x Python architecture are preserved below for historical context but are now superseded by the v0.2.0 Cloudflare-native architecture.)
 
-### Original Historical Deltas
+### SOT Delta — v0.1.6+
 
-(See archived CHANGELOG.md entries for v0.0.4, v0.0.5, v0.0.8 detailed memory and compaction architecture. These are superseded by v0.1.0 stateless telemetry model.)
-- Added non-blocking status file reads using threaded I/O boundaries.
-
-## SOT Delta — v0.0.8 Stateless Architecture Simplification
-
-- Converted to pure stateless request/response bridge. One message = one LLM inference. No state retained between messages.
-- Removed memory compaction system, structured summarizer, message history buffers, rolling context, and reset markers.
-- Removed background compaction tasks, per-channel locks, message counters, and threshold logic.
-- Removed Discord summary channel integration and auto-channel editing.
-- Removed `/reset` and `/memory status` slash commands.
-- Removed all memory-related configuration settings (`MAX_CONTEXT_PAIRS`, `MEMORY_*`).
-- Prompt format is now fixed: system = "You are Agent Smith. Provide direct, concise answers." + user message only.
-- Updated Product Invariants: fast-path chat invariant is now `User message → Ollama → streamed Discord response` with no history step.
+Agent Smith is a stateless, slash-command-only Discord operator bridge for fixed, read-only backend telemetry...

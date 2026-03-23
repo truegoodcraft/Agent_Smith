@@ -1,0 +1,16 @@
+name = "agent-smith"
+main = "src/index.ts"
+compatibility_date = "2024-03-22"
+
+[vars]
+# Lighthouse endpoint URLs — set to actual values before deployment.
+# These can be overridden in .dev.vars for local development.
+LIGHTHOUSE_REPORT_URL = ""
+
+[[durable_objects.bindings]]
+name = "AGENT_SMITH_DO"
+class_name = "SmithDO"
+
+[[migrations]]
+tag = "v1-create-do"
+new_classes = ["SmithDO"]

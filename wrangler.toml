@@ -12,5 +12,5 @@ name = "AGENT_SMITH_DO"
 class_name = "SmithDO"
 
 [[migrations]]
-tag = "v1-create-do"
-new_classes = ["SmithDO"]
+tag = "v1"
+new_sqlite_classes = ["SmithDO"]

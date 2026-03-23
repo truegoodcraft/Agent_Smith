@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.3] — 2026-03-23
+
+### Fixed
+
+*   **`wrangler.toml` Durable Object migration**: Replaced invalid `new_classes` key with `new_sqlite_classes` (required by Cloudflare Free plan for SQLite-backed DOs). Also corrected migration tag from `v1-create-do` to `v1`. The DO binding (`AGENT_SMITH_DO` → `SmithDO`) was already correct and is unchanged.
+
 ## [0.5.2] — 2026-03-22
 
 ### Removed

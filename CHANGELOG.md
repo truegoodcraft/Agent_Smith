@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.5] — 2026-03-23
+
+### Changed
+
+*   **`/report` deterministic presentation refresh**: Updated `src/logic/report.ts` to return a structured output with: status line, selected-window counters, today counters, deterministic read section, and deterministic trend section.
+*   **Deterministic comparison rules added**: `/report` now compares today total activity against the 7-day per-day average when `last_7_days` exists, and compares today against yesterday when available. Wording is plain, mechanical, and non-speculative.
+*   **Telemetry shape support extended for `/report`**: `src/types/telemetry.ts` now accepts optional `yesterday` and `month_to_date` windows in the validated Lighthouse payload while keeping `today` required.
+
 ## [0.5.4] — 2026-03-23
 
 ### Changed

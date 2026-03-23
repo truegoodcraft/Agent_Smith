@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.7] — 2026-03-23
+
+### Changed
+
+*   **`/report` Lighthouse traffic support**: Updated `src/types/telemetry.ts` and `src/logic/report.ts` so Smith accepts the optional `traffic` block returned by Lighthouse `/report` and formats it directly without creating a separate telemetry model.
+*   **Deterministic `/report` output reshaped**: Replaced the old selected-window/trend presentation with `Summary`, `Today`, `Traffic`, and `Read` sections. Traffic values now use Lighthouse field names (`requests`, `visits`) and null values are shown honestly as unavailable.
+*   **Backward compatibility for missing traffic**: When Lighthouse omits the entire `traffic` block, `/report` still succeeds and renders `Traffic data not present in this Lighthouse report.`
+*   **Governance docs aligned**: Updated `CONTRACTS.md`, `README.md`, and `SOT.md` to describe the new `/report` field consumption and output shape.
+
 ## [0.5.6] — 2026-03-23
 
 ### Changed

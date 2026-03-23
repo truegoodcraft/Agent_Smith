@@ -7,9 +7,11 @@ Agent Smith is a deterministic, personal-use Discord bot that watches fixed, rea
 | Command    | Description                                    |
 | :--------- | :--------------------------------------------- |
 | `/health`  | Confirms Worker + Durable Object are running   |
-| `/report`  | Compact telemetry report from Lighthouse       |
+| `/report`  | Compact Lighthouse report with optional traffic |
 
 `/traffic` and `/errors` are planned but not yet implemented.
+
+`/report` renders deterministic `Summary`, `Today`, `Traffic`, and `Read` sections. If Lighthouse omits `traffic`, Smith still succeeds and states that traffic data is not present in that report.
 
 See [CONTRACTS.md](CONTRACTS.md) for exact output shapes.
 

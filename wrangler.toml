@@ -5,7 +5,7 @@ compatibility_date = "2024-03-22"
 [vars]
 # Lighthouse endpoint URLs — set to actual values before deployment.
 # These can be overridden in .dev.vars for local development.
-LIGHTHOUSE_REPORT_URL = ""
+LIGHTHOUSE_REPORT_URL = "https://lighthouse.buscore.ca/report"
 
 [[durable_objects.bindings]]
 name = "AGENT_SMITH_DO"

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4] — 2026-03-23
+
+### Changed
+
+*   **Temporary /report diagnostics added**: `src/services/lighthouse.ts` now logs safe, non-secret diagnostics for the report fetch path: URL presence, safe URL origin/path, admin-token presence, response status/statusText, JSON parse success, and payload-validation success.
+*   **Safe debug codes surfaced to operator**: `src/commands/report.ts` now returns a short failure code in the ephemeral error message for report failures (`REPORT_URL_MISSING`, `REPORT_FETCH_FAILED`, `REPORT_401`, `REPORT_INVALID_JSON`, `REPORT_INVALID_PAYLOAD`).
+
 ## [0.5.3] — 2026-03-23
 
 ### Fixed

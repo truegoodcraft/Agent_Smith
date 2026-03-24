@@ -14,7 +14,6 @@ export interface ReportTrafficLatestDay {
   visits: number | null;
   requests: number | null;
   captured_at: string | null;
-  referrer_summary: unknown | null;
 }
 
 export interface ReportTrafficLast7Days {
@@ -100,8 +99,7 @@ function isReportTrafficLatestDay(data: any): data is ReportTrafficLatestDay {
     'requests' in data &&
     isNullableNumber(data.requests) &&
     'captured_at' in data &&
-    isNullableString(data.captured_at) &&
-    'referrer_summary' in data
+    isNullableString(data.captured_at)
   );
 }
 

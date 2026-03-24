@@ -30,7 +30,6 @@ Fetches and analyzes the primary telemetry report from `LIGHTHOUSE_REPORT_URL`.
     - `traffic.latest_day.visits`
     - `traffic.latest_day.requests`
     - `traffic.latest_day.captured_at`
-    - `traffic.latest_day.referrer_summary`
     - `traffic.last_7_days.visits`
     - `traffic.last_7_days.requests`
     - `traffic.last_7_days.avg_daily_visits`
@@ -56,7 +55,6 @@ Fetches and analyzes the primary telemetry report from `LIGHTHOUSE_REPORT_URL`.
     - Latest captured at: [timestamp or unavailable]
     - Latest requests: [count or unavailable]
     - Latest visits: [count or unavailable]
-    - Latest referrer summary: [serialized value or unavailable]
     - Last 7 days requests: [count or unavailable]
     - Last 7 days visits: [count or unavailable]
     - Avg daily requests: [count or unavailable]

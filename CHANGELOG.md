@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.8] — 2026-03-24
+
+### Changed
+
+*   **`/report` Lighthouse traffic contract aligned**: Removed all `referrer_summary` expectations from `src/types/telemetry.ts` and `src/logic/report.ts`. Smith now validates and formats traffic using only the current Lighthouse runtime fields.
+*   **Traffic section kept stable without referrer output**: `/report` still renders the same `Traffic` section and deterministic read behavior for traffic totals, but it no longer prints or reasons about referrers.
+*   **Contract docs updated**: Updated `CONTRACTS.md` and `SOT.md` to reflect the current Lighthouse `/report` traffic block and removed referrer-specific contract language.
+
 ## [0.5.7] — 2026-03-23
 
 ### Changed

@@ -82,22 +82,6 @@ function formatNullableValue(value: number | string | null): string {
   return String(value);
 }
 
-function formatReferrerSummary(value: unknown | null): string {
-  if (value === null) {
-    return 'unavailable';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return 'unavailable';
-  }
-}
-
 function formatTrafficSection(traffic?: ReportTraffic): string {
   if (!traffic) {
     return ['**Traffic**', 'Traffic data not present in this Lighthouse report.'].join('\n');
@@ -109,7 +93,6 @@ function formatTrafficSection(traffic?: ReportTraffic): string {
     `- Latest captured at: ${formatNullableValue(traffic.latest_day.captured_at)}`,
     `- Latest requests: ${formatNullableValue(traffic.latest_day.requests)}`,
     `- Latest visits: ${formatNullableValue(traffic.latest_day.visits)}`,
-    `- Latest referrer summary: ${formatReferrerSummary(traffic.latest_day.referrer_summary)}`,
     `- Last 7 days requests: ${formatNullableValue(traffic.last_7_days.requests)}`,
     `- Last 7 days visits: ${formatNullableValue(traffic.last_7_days.visits)}`,
     `- Avg daily requests: ${formatNullableValue(traffic.last_7_days.avg_daily_requests)}`,

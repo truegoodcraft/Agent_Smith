@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.9] — 2026-03-25
+
+### Changed
+
+*   **`/report` additive `human_traffic` support**: Extended `src/types/telemetry.ts` and `src/logic/report.ts` so Smith validates and consumes optional Lighthouse `human_traffic` fields while preserving existing report behavior when the block is missing.
+*   **New Human Traffic + Observability sections**: `/report` now renders `Human Traffic` and `Observability` sections below `Traffic` when `human_traffic` exists, including pageview totals and non-empty top lists for paths, referrers, and sources.
+*   **Read section extended without redesign**: Added a short deterministic human-layer read line when `human_traffic` exists to reflect presence/absence and download-pageview relationship signals.
+*   **Contract and SOT alignment**: Updated `CONTRACTS.md` and `SOT.md` to reflect optional `human_traffic` consumption, rendering, and fallback behavior.
+
 ## [0.5.8] — 2026-03-24
 
 ### Changed

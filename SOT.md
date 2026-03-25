@@ -2,11 +2,11 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.5.8 — Report contract cleanup)
+## Current Mission (v0.5.9 — Report human traffic alignment)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
 
-`/report` consumes Lighthouse `/report` as the only source of truth. It renders deterministic `Summary`, `Today`, `Traffic`, and `Read` sections, accepts an optional `traffic` block when present using only current Lighthouse traffic totals fields, and still succeeds with an explicit missing-traffic notice when the block is absent.
+`/report` consumes Lighthouse `/report` as the only source of truth. It renders deterministic `Summary`, `Today`, `Traffic`, and `Read` sections, accepts optional additive `traffic` and `human_traffic` blocks when present, and still succeeds when either optional block is absent. When `human_traffic` is present, `/report` additionally renders `Human Traffic` and `Observability` sections and appends a short deterministic human-layer read signal.
 
 This is a full rewrite path, not a preservation path for the previous Python implementation.
 

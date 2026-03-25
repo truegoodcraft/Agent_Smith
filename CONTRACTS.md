@@ -35,6 +35,21 @@ Fetches and analyzes the primary telemetry report from `LIGHTHOUSE_REPORT_URL`.
     - `traffic.last_7_days.avg_daily_visits`
     - `traffic.last_7_days.avg_daily_requests`
     - `traffic.last_7_days.days_with_data`
+  - Optional human traffic block:
+    - `human_traffic.today.pageviews`
+    - `human_traffic.today.last_received_at`
+    - `human_traffic.last_7_days.pageviews`
+    - `human_traffic.last_7_days.days_with_data`
+    - `human_traffic.last_7_days.top_paths[].path`
+    - `human_traffic.last_7_days.top_paths[].pageviews`
+    - `human_traffic.last_7_days.top_referrers[].referrer_domain`
+    - `human_traffic.last_7_days.top_referrers[].pageviews`
+    - `human_traffic.last_7_days.top_sources[].source`
+    - `human_traffic.last_7_days.top_sources[].pageviews`
+    - `human_traffic.observability.accepted`
+    - `human_traffic.observability.dropped_rate_limited`
+    - `human_traffic.observability.dropped_invalid`
+    - `human_traffic.observability.last_received_at`
 - **Deterministic Output Expectations**:
   - The message content must be a structured report adhering to the following format:
     ```
@@ -61,13 +76,32 @@ Fetches and analyzes the primary telemetry report from `LIGHTHOUSE_REPORT_URL`.
     - Avg daily visits: [count or unavailable]
     - Days with data: [count or unavailable]
 
+    **Human Traffic**
+    - Pageviews (today): [count]
+    - Pageviews (7d): [count]
+    - Days with data: [count]
+    Top Paths:
+    - [path] ([count])
+    Top Referrers:
+    - [referrer_domain] ([count])
+    Top Sources:
+    - [source] ([count])
+
+    **Observability**
+    - Accepted: [count]
+    - Dropped (rate limited): [count]
+    - Dropped (invalid): [count]
+
     **Read**
     - [deterministic core line]
     - [deterministic traffic line]
+    - [deterministic human line]
     ```
   - The summary section must use data from `last_7_days` if available, otherwise it must fall back to `today`.
   - The today section must always render `today` metrics.
   - If the `traffic` block is absent, the Traffic section must contain exactly `Traffic data not present in this Lighthouse report.` and the command must still succeed.
+  - If the `human_traffic` block is absent, both `Human Traffic` and `Observability` sections must be omitted and the command must still succeed with the same output structure used before human traffic support.
+  - If `human_traffic` top lists are empty, corresponding `Top Paths`, `Top Referrers`, and `Top Sources` headings must be omitted.
   - If traffic values are `null`, the report must present them honestly as unavailable and must not invent replacement values.
   - The core read line is determined by selected-window counters only:
     - `errors > 0` → `Recent error activity present; investigation recommended.`
@@ -79,6 +113,12 @@ Fetches and analyzes the primary telemetry report from `LIGHTHOUSE_REPORT_URL`.
     - otherwise → `No traffic snapshot recorded yet.`
     - If `days_with_data == 0`, append `No traffic history stored in the last 7 days.`
     - If `days_with_data > 0` and `avg_daily_requests > 0`, append `Traffic history is available for recent days.`
+  - The optional human read line is shown only when `human_traffic` exists and is determined by human pageviews plus selected-window downloads:
+    - `human_traffic.today.pageviews > 0` → includes `Human activity present with [count] pageviews.`
+    - otherwise → includes `Human traffic absent or very low.`
+    - selected-window `downloads > 0` and selected-window human pageviews `== 0` → includes `Downloads present without pageviews (possible direct/binary access).`
+    - selected-window human pageviews `> 0` and selected-window `downloads == 0` → includes `Pageviews present without downloads (low conversion).`
+    - selected-window human pageviews `> 0` and selected-window `downloads > 0` → includes `Pageviews and downloads both present (active engagement).`
   - If the fetch or validation fails, an ephemeral error message is shown instead.
 
 ## Deferred Commands

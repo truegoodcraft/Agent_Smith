@@ -1,6 +1,12 @@
 // src/logic/report.ts
 
-import { LighthouseReport, ReportTraffic, ReportWindow, SelectedReport } from '../types/telemetry';
+import {
+  LighthouseReport,
+  ReportHumanTraffic,
+  ReportTraffic,
+  ReportWindow,
+  SelectedReport,
+} from '../types/telemetry';
 
 /**
  * Selects the canonical report window based on fixed rules.
@@ -14,6 +20,7 @@ export function selectReportWindow(payload: LighthouseReport): SelectedReport {
       today: payload.today,
       yesterday: payload.yesterday,
       traffic: payload.traffic,
+      human_traffic: payload.human_traffic,
     };
   }
   return {
@@ -22,6 +29,7 @@ export function selectReportWindow(payload: LighthouseReport): SelectedReport {
     today: payload.today,
     yesterday: payload.yesterday,
     traffic: payload.traffic,
+    human_traffic: payload.human_traffic,
   };
 }
 
@@ -101,6 +109,84 @@ function formatTrafficSection(traffic?: ReportTraffic): string {
   ].join('\n');
 }
 
+function formatTopList(
+  heading: string,
+  entries: string[],
+): string {
+  if (entries.length === 0) {
+    return '';
+  }
+
+  return [heading, ...entries.map((entry) => `- ${entry}`)].join('\n');
+}
+
+function formatHumanTrafficSection(humanTraffic: ReportHumanTraffic): string {
+  const topPathsBlock = formatTopList(
+    'Top Paths:',
+    humanTraffic.last_7_days.top_paths.map((entry) => `${entry.path} (${entry.pageviews})`),
+  );
+  const topReferrersBlock = formatTopList(
+    'Top Referrers:',
+    humanTraffic.last_7_days.top_referrers.map(
+      (entry) => `${entry.referrer_domain} (${entry.pageviews})`,
+    ),
+  );
+  const topSourcesBlock = formatTopList(
+    'Top Sources:',
+    humanTraffic.last_7_days.top_sources.map((entry) => `${entry.source} (${entry.pageviews})`),
+  );
+
+  return [
+    '**Human Traffic**',
+    `- Pageviews (today): ${humanTraffic.today.pageviews}`,
+    `- Pageviews (7d): ${humanTraffic.last_7_days.pageviews}`,
+    `- Days with data: ${humanTraffic.last_7_days.days_with_data}`,
+    topPathsBlock,
+    topReferrersBlock,
+    topSourcesBlock,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function formatHumanObservabilitySection(humanTraffic: ReportHumanTraffic): string {
+  return [
+    '**Observability**',
+    `- Accepted: ${humanTraffic.observability.accepted}`,
+    `- Dropped (rate limited): ${humanTraffic.observability.dropped_rate_limited}`,
+    `- Dropped (invalid): ${humanTraffic.observability.dropped_invalid}`,
+  ].join('\n');
+}
+
+export function getHumanTrafficRead(
+  humanTraffic: ReportHumanTraffic | undefined,
+  selected: ReportWindow,
+  windowLabel: '7d' | 'today',
+): string | null {
+  if (!humanTraffic) {
+    return null;
+  }
+
+  const pageviewsInSelectedWindow = windowLabel === '7d'
+    ? humanTraffic.last_7_days.pageviews
+    : humanTraffic.today.pageviews;
+
+  const humanSignalLine = humanTraffic.today.pageviews > 0
+    ? `Human activity present with ${humanTraffic.today.pageviews} pageviews.`
+    : 'Human traffic absent or very low.';
+
+  let engagementLine = '';
+  if (selected.downloads > 0 && pageviewsInSelectedWindow === 0) {
+    engagementLine = 'Downloads present without pageviews (possible direct/binary access).';
+  } else if (pageviewsInSelectedWindow > 0 && selected.downloads === 0) {
+    engagementLine = 'Pageviews present without downloads (low conversion).';
+  } else if (pageviewsInSelectedWindow > 0 && selected.downloads > 0) {
+    engagementLine = 'Pageviews and downloads both present (active engagement).';
+  }
+
+  return [humanSignalLine, engagementLine].filter(Boolean).join(' ');
+}
+
 /**
  * Formats the final report string to be sent to Discord.
  */
@@ -112,11 +198,22 @@ export function formatReport(report: SelectedReport): string {
   const selectedBlock = formatCounters('Summary', report.selected);
   const todayBlock = formatCounters('Today', report.today);
   const trafficBlock = formatTrafficSection(report.traffic);
-  const deterministicRead = [getCoreRead(report.selected), getTrafficRead(report.traffic)]
+  const humanTrafficBlock = report.human_traffic
+    ? formatHumanTrafficSection(report.human_traffic)
+    : null;
+  const humanObservabilityBlock = report.human_traffic
+    ? formatHumanObservabilitySection(report.human_traffic)
+    : null;
+  const deterministicRead = [
+    getCoreRead(report.selected),
+    getTrafficRead(report.traffic),
+    getHumanTrafficRead(report.human_traffic, report.selected, report.windowLabel),
+  ]
+    .filter((line): line is string => Boolean(line))
     .map((line) => `- ${line}`)
     .join('\n');
 
-  return [
+  const sections = [
     `**${statusLine}**`,
     '',
     selectedBlock,
@@ -124,8 +221,22 @@ export function formatReport(report: SelectedReport): string {
     todayBlock,
     '',
     trafficBlock,
+  ];
+
+  if (humanTrafficBlock && humanObservabilityBlock) {
+    sections.push(
+      '',
+      humanTrafficBlock,
+      '',
+      humanObservabilityBlock,
+    );
+  }
+
+  sections.push(
     '',
     '**Read**',
     deterministicRead,
-  ].join('\n');
+  );
+
+  return sections.join('\n');
 }

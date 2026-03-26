@@ -191,9 +191,10 @@ export function getHumanTrafficRead(
  * Formats the final report string to be sent to Discord.
  */
 export function formatReport(report: SelectedReport): string {
-  const statusLine = report.windowLabel === '7d'
-    ? 'Report · OK · 7d'
-    : 'Report · OK · today';
+  try {
+    const statusLine = report.windowLabel === '7d'
+      ? 'Report · OK · 7d'
+      : 'Report · OK · today';
 
   const selectedBlock = formatCounters('Summary', report.selected);
   const todayBlock = formatCounters('Today', report.today);
@@ -238,5 +239,11 @@ export function formatReport(report: SelectedReport): string {
     deterministicRead,
   );
 
-  return sections.join('\n');
+  const formatted = sections.join('\n');
+  console.log('[REPORT_FORMAT_OK] Report formatted successfully');
+  return formatted;
+  } catch (e) {
+    console.error('[REPORT_FORMAT_FAIL] Exception during formatting', e);
+    throw e;
+  }
 }

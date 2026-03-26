@@ -42,18 +42,31 @@ export async function getLighthouseReport(env: Env): Promise<LighthouseReport> {
     );
   }
 
+  console.log('[REPORT_FETCH_OK] Lighthouse HTTP 200 received');
+
   let data: unknown;
   try {
     data = await response.json();
-  } catch {
+  } catch (e) {
+    console.error('[REPORT_JSON_FAIL] Failed to parse JSON from Lighthouse response', e);
     throw new LighthouseError('Lighthouse service returned invalid JSON.');
+  }
+
+  console.log('[REPORT_JSON_OK] Lighthouse response parsed successfully');
+
+  if (data && typeof data === 'object') {
+    const topLevelKeys = Object.keys(data as Record<string, unknown>).sort();
+    console.log('[REPORT_TOP_LEVEL_KEYS]', topLevelKeys.join(', '));
   }
 
   const payloadValidationSucceeded = isLighthouseReport(data);
 
   if (!payloadValidationSucceeded) {
+    console.error('[REPORT_VALIDATION_FAIL] Payload failed schema validation');
     throw new LighthouseError('Invalid or malformed payload received from Lighthouse service.');
   }
+
+  console.log('[REPORT_VALIDATION_OK] Payload passed schema validation');
 
   return data as LighthouseReport;
 }

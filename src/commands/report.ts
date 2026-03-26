@@ -7,7 +7,13 @@ async function handle(interaction: APIApplicationCommandInteraction, env: Env): 
   try {
     const lighthouseData = await getLighthouseReport(env);
     const selectedReport = selectReportWindow(lighthouseData);
-    const reportContent = formatReport(selectedReport);
+    let reportContent: string;
+    try {
+      reportContent = formatReport(selectedReport);
+    } catch (formatError) {
+      console.error('[REPORT_FORMAT_FAIL] Failed to format report', formatError);
+      throw formatError;
+    }
 
     return {
       type: InteractionResponseType.ChannelMessageWithSource,
@@ -15,12 +21,22 @@ async function handle(interaction: APIApplicationCommandInteraction, env: Env): 
         content: reportContent,
       },
     };
-  } catch {
+  } catch (error) {
     // TODO: In the future, log the full error to a real logging service.
+    let debugCode = '';
+    if (error instanceof Error) {
+      if (error.message.includes('JSON')) {
+        debugCode = ' (REPORT_JSON_FAIL)';
+      } else if (error.message.includes('Invalid or malformed')) {
+        debugCode = ' (REPORT_VALIDATION_FAIL)';
+      } else if (error.message.includes('format')) {
+        debugCode = ' (REPORT_FORMAT_FAIL)';
+      }
+    }
     return {
       type: InteractionResponseType.ChannelMessageWithSource,
       data: {
-        content: 'Could not retrieve the report at this time.',
+        content: `Could not retrieve the report at this time.${debugCode}`,
         flags: 64, // Ephemeral
       },
     };

@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.0] — 2026-03-25
+
+### Added
+
+*   **`/report` debug pass for diagnostics**: Added granular console logging with safe debug codes to identify exactly where `/report` fails after Lighthouse returns HTTP 200.
+*   **Debug codes in error messages**: User-facing `/report` error message now includes a safe debug code suffix like `(REPORT_JSON_FAIL)`, `(REPORT_VALIDATION_FAIL)`, or `(REPORT_FORMAT_FAIL)` to indicate the failure stage.
+*   **Safe diagnostic logging**: Console logs for fetch, JSON parsing, schema validation, and formatting stages log only safe information: HTTP status, top-level keys, section existence checks, success/failure status—no secrets or full payloads.
+
+### Changed
+
+*   **Console logs added at 7 distinct stages**:
+    - `[REPORT_FETCH_OK]`: Lighthouse HTTP 200 confirmed
+    - `[REPORT_JSON_OK]`: JSON parsed successfully
+    - `[REPORT_TOP_LEVEL_KEYS]`: List of top-level keys from Lighthouse response
+    - `[REPORT_VALIDATION_OK]`: Payload passed schema validation
+    - `[REPORT_VALIDATION_FAIL]`: Payload failed validation (logged on failure)
+    - `[REPORT_FORMAT_OK]`: Report formatted successfully for Discord
+    - `[REPORT_FORMAT_FAIL]`: Formatting exception (logged on failure)
+
 ## [0.5.9] — 2026-03-25
 
 ### Changed

@@ -84,6 +84,15 @@ export interface LighthouseReport {
   // Other fields from the API can be added here but are not used by the /report command.
 }
 
+export interface SelectedReport {
+  windowLabel: 'today' | '7d';
+  selected: ReportWindow;
+  today: ReportWindow;
+  yesterday?: ReportWindow;
+  traffic?: ReportTraffic;
+  human_traffic?: ReportHumanTraffic;
+}
+
 /**
  * A type guard to validate if an object conforms to the LighthouseReport structure.
  * LENIENT validation: Only requires core fields (today.{update_checks, downloads, errors} and optionally last_7_days with same fields).
@@ -201,6 +210,44 @@ function isReportTrafficNarrow(data: any): boolean {
 }
 
 /**
+ * Narrow validator for the human_traffic section (optional).
+ * Validates only the fields /report formatting consumes.
+ */
+function isReportHumanTrafficNarrow(data: any): boolean {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+
+  if ('today' in data) {
+    const today = data.today;
+    if (!today || typeof today !== 'object') return false;
+    if (typeof today.pageviews !== 'number') return false;
+    if (typeof today.last_received_at !== 'string') return false;
+  }
+
+  if ('last_7_days' in data) {
+    const l7 = data.last_7_days;
+    if (!l7 || typeof l7 !== 'object') return false;
+    if (typeof l7.pageviews !== 'number') return false;
+    if (typeof l7.days_with_data !== 'number') return false;
+    if (!Array.isArray(l7.top_paths) || !Array.isArray(l7.top_referrers) || !Array.isArray(l7.top_sources)) {
+      return false;
+    }
+  }
+
+  if ('observability' in data) {
+    const o = data.observability;
+    if (!o || typeof o !== 'object') return false;
+    if (typeof o.accepted !== 'number') return false;
+    if (typeof o.dropped_rate_limited !== 'number') return false;
+    if (typeof o.dropped_invalid !== 'number') return false;
+    if (typeof o.last_received_at !== 'string') return false;
+  }
+
+  return true;
+}
+
+/**
  * Normalizes an unknown Lighthouse payload into a safe, formatter-ready LighthouseReport.
  * Required core: today.update_checks, today.downloads, today.errors.
  * Optional sections are sanitized: invalid/malformed optional blocks become undefined.
@@ -280,14 +327,29 @@ export function normalizeLighthouseReport(data: unknown): LighthouseReport | nul
 
   return normalized;
 }
-      isNullableString(record.day) &&
-      isNullableNumber(record.visits) &&
-      isNullableNumber(record.requests) &&
-      isNullableString(record.captured_at)
-    );
+function isNullableNumber(data: unknown): data is number | null {
+  return typeof data === 'number' || data === null;
+}
+
+function isNullableString(data: unknown): data is string | null {
+  return typeof data === 'string' || data === null;
+}
+
+function isReportTrafficLatestDay(data: unknown): data is ReportTrafficLatestDay {
+  if (!data || typeof data !== 'object') {
+    return false;
   }
 
-  function isReportTrafficLast7Days(data: unknown): data is ReportTrafficLast7Days {
+  const record = data as Record<string, unknown>;
+  return (
+    isNullableString(record.day) &&
+    isNullableNumber(record.visits) &&
+    isNullableNumber(record.requests) &&
+    isNullableString(record.captured_at)
+  );
+}
+
+function isReportTrafficLast7Days(data: unknown): data is ReportTrafficLast7Days {
     if (!data || typeof data !== 'object') {
       return false;
     }
@@ -300,9 +362,9 @@ export function normalizeLighthouseReport(data: unknown): LighthouseReport | nul
       isNullableNumber(record.avg_daily_requests) &&
       isNullableNumber(record.days_with_data)
     );
-  }
+}
 
-  function isReportTraffic(data: unknown): data is ReportTraffic {
+function isReportTraffic(data: unknown): data is ReportTraffic {
     if (!data || typeof data !== 'object') {
       return false;
     }
@@ -312,45 +374,45 @@ export function normalizeLighthouseReport(data: unknown): LighthouseReport | nul
       isReportTrafficLatestDay(record.latest_day) &&
       isReportTrafficLast7Days(record.last_7_days)
     );
-  }
+}
 
-  function isReportHumanTopPath(data: unknown): data is ReportHumanTopPath {
+function isReportHumanTopPath(data: unknown): data is ReportHumanTopPath {
     if (!data || typeof data !== 'object') {
       return false;
     }
 
     const record = data as Record<string, unknown>;
     return typeof record.path === 'string' && typeof record.pageviews === 'number';
-  }
+}
 
-  function isReportHumanTopReferrer(data: unknown): data is ReportHumanTopReferrer {
+function isReportHumanTopReferrer(data: unknown): data is ReportHumanTopReferrer {
     if (!data || typeof data !== 'object') {
       return false;
     }
 
     const record = data as Record<string, unknown>;
     return typeof record.referrer_domain === 'string' && typeof record.pageviews === 'number';
-  }
+}
 
-  function isReportHumanTopSource(data: unknown): data is ReportHumanTopSource {
+function isReportHumanTopSource(data: unknown): data is ReportHumanTopSource {
     if (!data || typeof data !== 'object') {
       return false;
     }
 
     const record = data as Record<string, unknown>;
     return typeof record.source === 'string' && typeof record.pageviews === 'number';
-  }
+}
 
-  function isReportHumanToday(data: unknown): data is ReportHumanToday {
+function isReportHumanToday(data: unknown): data is ReportHumanToday {
     if (!data || typeof data !== 'object') {
       return false;
     }
 
     const record = data as Record<string, unknown>;
     return typeof record.pageviews === 'number' && typeof record.last_received_at === 'string';
-  }
+}
 
-  function isReportHumanLast7Days(data: unknown): data is ReportHumanLast7Days {
+function isReportHumanLast7Days(data: unknown): data is ReportHumanLast7Days {
     if (!data || typeof data !== 'object') {
       return false;
     }
@@ -366,9 +428,9 @@ export function normalizeLighthouseReport(data: unknown): LighthouseReport | nul
       Array.isArray(record.top_sources) &&
       record.top_sources.every(isReportHumanTopSource)
     );
-  }
+}
 
-  function isReportHumanObservability(data: unknown): data is ReportHumanObservability {
+function isReportHumanObservability(data: unknown): data is ReportHumanObservability {
     if (!data || typeof data !== 'object') {
       return false;
     }
@@ -380,9 +442,9 @@ export function normalizeLighthouseReport(data: unknown): LighthouseReport | nul
       typeof record.dropped_invalid === 'number' &&
       typeof record.last_received_at === 'string'
     );
-  }
+}
 
-  function isReportHumanTraffic(data: unknown): data is ReportHumanTraffic {
+function isReportHumanTraffic(data: unknown): data is ReportHumanTraffic {
     if (!data || typeof data !== 'object') {
       return false;
     }
@@ -393,4 +455,4 @@ export function normalizeLighthouseReport(data: unknown): LighthouseReport | nul
       isReportHumanLast7Days(record.last_7_days) &&
       isReportHumanObservability(record.observability)
     );
-  }
+}

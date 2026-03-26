@@ -2,13 +2,15 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.6.2 — Normalized /report payload handling)
+## Current Mission (v0.6.3 — Telemetry syntax integrity hotfix)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
 
 `/report` consumes Lighthouse `/report` as the only source of truth. It now uses an explicit normalization step before formatting. Required core is only `today.update_checks`, `today.downloads`, and `today.errors`. Optional sections (`last_7_days`, `yesterday`, `month_to_date`, `traffic`, `human_traffic`, `trends`) are sanitized: valid sections are retained; invalid/malformed sections are set to `undefined`. Unknown top-level keys are ignored. Formatter and report selection consume only this normalized object, preserving the existing deterministic output shape (`Summary`, `Today`, `Traffic`, optional `Human Traffic` + `Observability`, and `Read`).
 
 **[v0.6.2 Normalization Pipeline]** `normalizeLighthouseReport()` is the authoritative parser for Lighthouse `/report`. Schema acceptance is decoupled from optional section shape by sanitizing optional sections rather than rejecting the whole payload. This removes the prior false coupling where optional `last_7_days` could block otherwise valid payloads.
+
+**[v0.6.3 Syntax Integrity Hotfix]** `src/types/telemetry.ts` had a mangled mid-file insertion around normalization that introduced parse-breaking tokens and an unmatched closing structure. The file was repaired with minimal, non-behavioral syntax restoration. `normalizeLighthouseReport()` remains present and preserves required-core acceptance with optional-section sanitization semantics.
 
 **[v0.6.1 Validation Relaxation]** Schema validation no longer rejects live Lighthouse payloads due to strict optional-section enforcement. `isLighthouseReport()` now uses lenient validation with narrow sub-validators for optional sections. When optional sections are present, `isReportTrafficNarrow()` and `isReportHumanTrafficNarrow()` validate only the fields used by formatting logic. Malformed optional sections are logged with `[REPORT_VALIDATION_WARN]` and skipped rather than failing the entire request.
 

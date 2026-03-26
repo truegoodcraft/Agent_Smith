@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.3] — 2026-03-25
+
+### Fixed
+
+*   **`src/types/telemetry.ts` syntax corruption repaired**: Removed mangled/truncated code inserted around the normalize block that caused parser failures (`Expression expected`, `';' expected`, `Identifier expected`, `Unterminated regular expression literal`, and final missing `}`) during `npm run typecheck`.
+*   **Normalization/sanitization path preserved**: Kept `normalizeLighthouseReport()` present and active with required-core validation and optional-section sanitization behavior intact.
+*   **Type export/helper continuity restored**: Reintroduced missing `SelectedReport` export and `isReportHumanTrafficNarrow()` helper reference continuity so downstream report typing compiles without changing report behavior.
+
 ## [0.6.2] — 2026-03-25
 
 ### Fixed

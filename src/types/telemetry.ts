@@ -198,126 +198,88 @@ function isReportTrafficNarrow(data: any): boolean {
   }
 
   return true;
-   * Normalizes an unknown Lighthouse payload into a safe, formatter-ready LighthouseReport.
-   * Required core: today.update_checks, today.downloads, today.errors.
-   * Optional sections are sanitized: invalid/malformed optional blocks become undefined.
-   * Unknown top-level keys are ignored.
- * Validates the structure minimally: today.pageviews, last_7_days.pageviews, observability.accepted.
-  export function normalizeLighthouseReport(data: unknown): LighthouseReport | null {
+}
+
+/**
+ * Normalizes an unknown Lighthouse payload into a safe, formatter-ready LighthouseReport.
+ * Required core: today.update_checks, today.downloads, today.errors.
+ * Optional sections are sanitized: invalid/malformed optional blocks become undefined.
+ * Unknown top-level keys are ignored.
  */
-      return null;
+export function normalizeLighthouseReport(data: unknown): LighthouseReport | null {
   if (!data || typeof data !== 'object') {
-
-    const record = data as Record<string, unknown>;
-    return false;
-    // REQUIRED CORE: today with the three required metrics.
-    if (!isCoreReportWindow(record.today)) {
-  if ('today' in data) {
-      return null;
-    if (!today || typeof today !== 'object') return false;
-    if (typeof today.pageviews !== 'number') return false;
-    const normalized: LighthouseReport = {
-      today: record.today,
-      last_7_days: undefined,
-      yesterday: undefined,
-      month_to_date: undefined,
-      traffic: undefined,
-      human_traffic: undefined,
-      trends: undefined,
-    };
-
-    // OPTIONAL: last_7_days
-    if ('last_7_days' in record) {
-      if (isCoreReportWindow(record.last_7_days)) {
-        normalized.last_7_days = record.last_7_days;
-      } else {
-        console.warn('[REPORT_VALIDATION_WARN] last_7_days present but invalid; sanitized to undefined');
-      }
-    }
-
-    // OPTIONAL: yesterday
-    if ('yesterday' in record) {
-      if (isCoreReportWindow(record.yesterday)) {
-        normalized.yesterday = record.yesterday;
-      } else {
-        console.warn('[REPORT_VALIDATION_WARN] yesterday present but invalid; sanitized to undefined');
-      }
-    }
-
-    // OPTIONAL: month_to_date
-    if ('month_to_date' in record) {
-      if (isCoreReportWindow(record.month_to_date)) {
-        normalized.month_to_date = record.month_to_date;
-      } else {
-        console.warn('[REPORT_VALIDATION_WARN] month_to_date present but invalid; sanitized to undefined');
-      }
-    }
-
-    // OPTIONAL: traffic
-    if ('traffic' in record) {
-      if (isReportTraffic(record.traffic)) {
-        normalized.traffic = record.traffic;
-      } else {
-        console.warn('[REPORT_VALIDATION_WARN] traffic present but invalid; sanitized to undefined');
-      }
-    }
-
-    // OPTIONAL: human_traffic
-    if ('human_traffic' in record) {
-      if (isReportHumanTraffic(record.human_traffic)) {
-        normalized.human_traffic = record.human_traffic;
-      } else {
-        console.warn('[REPORT_VALIDATION_WARN] human_traffic present but invalid; sanitized to undefined');
-      }
-    }
-
-    // OPTIONAL: trends (opaque, accepted as-is when present)
-    if ('trends' in record) {
-      normalized.trends = record.trends;
-    }
-
-    return normalized;
+    return null;
   }
 
-  /**
-   * Backward-compatible validator wrapper.
-   * True only when normalization succeeds for required core fields.
-   */
-  export function isLighthouseReport(data: unknown): data is LighthouseReport {
-    return normalizeLighthouseReport(data) !== null;
+  const record = data as Record<string, unknown>;
+
+  // REQUIRED CORE: today with the three required metrics.
+  if (!isCoreReportWindow(record.today)) {
+    return null;
   }
 
-  /**
-   * Core metric fields validator (narrow): checks only for update_checks, downloads, errors.
-   */
-  function isCoreReportWindow(data: unknown): data is ReportWindow {
-    if (!data || typeof data !== 'object') {
-      return false;
+  const normalized: LighthouseReport = {
+    today: record.today,
+    last_7_days: undefined,
+    yesterday: undefined,
+    month_to_date: undefined,
+    traffic: undefined,
+    human_traffic: undefined,
+    trends: undefined,
+  };
+
+  // OPTIONAL: last_7_days
+  if ('last_7_days' in record) {
+    if (isCoreReportWindow(record.last_7_days)) {
+      normalized.last_7_days = record.last_7_days;
+    } else {
+      console.warn('[REPORT_VALIDATION_WARN] last_7_days present but invalid; sanitized to undefined');
     }
-
-    const record = data as Record<string, unknown>;
-    return (
-      typeof record.update_checks === 'number' &&
-      typeof record.downloads === 'number' &&
-      typeof record.errors === 'number'
-    );
   }
 
-  function isNullableNumber(data: unknown): data is number | null {
-    return typeof data === 'number' || data === null;
-  }
-
-  function isNullableString(data: unknown): data is string | null {
-    return typeof data === 'string' || data === null;
-  }
-
-  function isReportTrafficLatestDay(data: unknown): data is ReportTrafficLatestDay {
-    if (!data || typeof data !== 'object') {
-      return false;
+  // OPTIONAL: yesterday
+  if ('yesterday' in record) {
+    if (isCoreReportWindow(record.yesterday)) {
+      normalized.yesterday = record.yesterday;
+    } else {
+      console.warn('[REPORT_VALIDATION_WARN] yesterday present but invalid; sanitized to undefined');
     }
+  }
 
-    const record = data as Record<string, unknown>;
-    return (
+  // OPTIONAL: month_to_date
+  if ('month_to_date' in record) {
+    if (isCoreReportWindow(record.month_to_date)) {
+      normalized.month_to_date = record.month_to_date;
+    } else {
+      console.warn('[REPORT_VALIDATION_WARN] month_to_date present but invalid; sanitized to undefined');
+    }
+  }
+
+  // OPTIONAL: traffic
+  if ('traffic' in record) {
+    if (isReportTrafficNarrow(record.traffic)) {
+      normalized.traffic = record.traffic as ReportTraffic;
+    } else {
+      console.warn('[REPORT_VALIDATION_WARN] traffic present but invalid; sanitized to undefined');
+    }
+  }
+
+  // OPTIONAL: human_traffic
+  if ('human_traffic' in record) {
+    if (isReportHumanTrafficNarrow(record.human_traffic)) {
+      normalized.human_traffic = record.human_traffic as ReportHumanTraffic;
+    } else {
+      console.warn('[REPORT_VALIDATION_WARN] human_traffic present but invalid; sanitized to undefined');
+    }
+  }
+
+  // OPTIONAL: trends (opaque, accepted as-is when present)
+  if ('trends' in record) {
+    normalized.trends = record.trends;
+  }
+
+  return normalized;
+}
       isNullableString(record.day) &&
       isNullableNumber(record.visits) &&
       isNullableNumber(record.requests) &&

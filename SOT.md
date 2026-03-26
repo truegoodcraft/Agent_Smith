@@ -2,11 +2,13 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.6.1 — Lenient /report validation for live Lighthouse payloads)
+## Current Mission (v0.6.2 — Normalized /report payload handling)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
 
-`/report` consumes Lighthouse `/report` as the only source of truth. It requires only the core metric fields (`today.update_checks`, `today.downloads`, `today.errors`, and optionally `last_7_days` with the same three fields) and validates all additional sections narrowly and defensively. Optional sections (`yesterday`, `month_to_date`, `traffic`, `human_traffic`, `trends`, `observability`) are tolerated if present, validated narrowly for the fields `/report` actually uses, and safely skipped if malformed. Unknown top-level keys are ignored. It renders deterministic `Summary`, `Today`, `Traffic`, and `Read` sections, accepts optional additive `traffic` and `human_traffic` blocks when present, and still succeeds when either optional block is absent. When `human_traffic` is present, `/report` additionally renders `Human Traffic` and `Observability` sections and appends a short deterministic human-layer read signal.
+`/report` consumes Lighthouse `/report` as the only source of truth. It now uses an explicit normalization step before formatting. Required core is only `today.update_checks`, `today.downloads`, and `today.errors`. Optional sections (`last_7_days`, `yesterday`, `month_to_date`, `traffic`, `human_traffic`, `trends`) are sanitized: valid sections are retained; invalid/malformed sections are set to `undefined`. Unknown top-level keys are ignored. Formatter and report selection consume only this normalized object, preserving the existing deterministic output shape (`Summary`, `Today`, `Traffic`, optional `Human Traffic` + `Observability`, and `Read`).
+
+**[v0.6.2 Normalization Pipeline]** `normalizeLighthouseReport()` is the authoritative parser for Lighthouse `/report`. Schema acceptance is decoupled from optional section shape by sanitizing optional sections rather than rejecting the whole payload. This removes the prior false coupling where optional `last_7_days` could block otherwise valid payloads.
 
 **[v0.6.1 Validation Relaxation]** Schema validation no longer rejects live Lighthouse payloads due to strict optional-section enforcement. `isLighthouseReport()` now uses lenient validation with narrow sub-validators for optional sections. When optional sections are present, `isReportTrafficNarrow()` and `isReportHumanTrafficNarrow()` validate only the fields used by formatting logic. Malformed optional sections are logged with `[REPORT_VALIDATION_WARN]` and skipped rather than failing the entire request.
 

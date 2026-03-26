@@ -1,7 +1,7 @@
 // src/services/lighthouse.ts
 
 import { Env } from '../types';
-import { LighthouseReport, isLighthouseReport } from '../types/telemetry';
+import { LighthouseReport, normalizeLighthouseReport } from '../types/telemetry';
 
 export class LighthouseError extends Error {
   constructor(message: string) {
@@ -59,14 +59,14 @@ export async function getLighthouseReport(env: Env): Promise<LighthouseReport> {
     console.log('[REPORT_TOP_LEVEL_KEYS]', topLevelKeys.join(', '));
   }
 
-  const payloadValidationSucceeded = isLighthouseReport(data);
+  const normalizedReport = normalizeLighthouseReport(data);
 
-  if (!payloadValidationSucceeded) {
+  if (!normalizedReport) {
     console.error('[REPORT_VALIDATION_FAIL] Payload failed schema validation');
     throw new LighthouseError('Invalid or malformed payload received from Lighthouse service.');
   }
 
   console.log('[REPORT_VALIDATION_OK] Payload passed schema validation');
 
-  return data as LighthouseReport;
+  return normalizedReport;
 }

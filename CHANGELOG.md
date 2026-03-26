@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.2] — 2026-03-25
+
+### Fixed
+
+*   **`/report` parsing now uses explicit normalization/sanitization**: Added `normalizeLighthouseReport()` in `src/types/telemetry.ts` and switched `src/services/lighthouse.ts` to return only normalized data to downstream logic.
+*   **Required core enforced correctly**: Only `today.update_checks`, `today.downloads`, and `today.errors` are required for payload acceptance.
+*   **Optional sections sanitized to `undefined` when invalid**: `last_7_days`, `yesterday`, `month_to_date`, `traffic`, and `human_traffic` are now validated and sanitized; invalid optional sections no longer crash formatting.
+*   **`trends` handled as optional opaque section**: If present, passed through as optional; if absent, `undefined`.
+*   **Unknown top-level keys ignored**: Extra top-level Lighthouse keys are now tolerated and dropped from normalized output.
+*   **Removed false `last_7_days` requirement behavior**: Eliminated `return hasOptionalLast7Days` path that could reject otherwise valid payloads.
+
 ## [0.6.1] — 2026-03-25
 
 ### Fixed

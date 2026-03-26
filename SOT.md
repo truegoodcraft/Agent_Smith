@@ -2,11 +2,13 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.6.0 — Debug pass for /report diagnostics)
+## Current Mission (v0.6.1 — Lenient /report validation for live Lighthouse payloads)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
 
-`/report` consumes Lighthouse `/report` as the only source of truth. It renders deterministic `Summary`, `Today`, `Traffic`, and `Read` sections, accepts optional additive `traffic` and `human_traffic` blocks when present, and still succeeds when either optional block is absent. When `human_traffic` is present, `/report` additionally renders `Human Traffic` and `Observability` sections and appends a short deterministic human-layer read signal.
+`/report` consumes Lighthouse `/report` as the only source of truth. It requires only the core metric fields (`today.update_checks`, `today.downloads`, `today.errors`, and optionally `last_7_days` with the same three fields) and validates all additional sections narrowly and defensively. Optional sections (`yesterday`, `month_to_date`, `traffic`, `human_traffic`, `trends`, `observability`) are tolerated if present, validated narrowly for the fields `/report` actually uses, and safely skipped if malformed. Unknown top-level keys are ignored. It renders deterministic `Summary`, `Today`, `Traffic`, and `Read` sections, accepts optional additive `traffic` and `human_traffic` blocks when present, and still succeeds when either optional block is absent. When `human_traffic` is present, `/report` additionally renders `Human Traffic` and `Observability` sections and appends a short deterministic human-layer read signal.
+
+**[v0.6.1 Validation Relaxation]** Schema validation no longer rejects live Lighthouse payloads due to strict optional-section enforcement. `isLighthouseReport()` now uses lenient validation with narrow sub-validators for optional sections. When optional sections are present, `isReportTrafficNarrow()` and `isReportHumanTrafficNarrow()` validate only the fields used by formatting logic. Malformed optional sections are logged with `[REPORT_VALIDATION_WARN]` and skipped rather than failing the entire request.
 
 **[v0.6.0 Debugging Capability]** When `/report` fails after Lighthouse returns HTTP 200, console logs now provide granular diagnostics at 7 stages (fetch, JSON parse, top-level keys, schema validation, formatting). Error responses include safe debug codes like `(REPORT_JSON_FAIL)`, `(REPORT_VALIDATION_FAIL)`, `(REPORT_FORMAT_FAIL)` for operator triage. All logged information is safe: no secrets, no full payloads, only HTTP status, key lists, section existence, and success/failure states.
 

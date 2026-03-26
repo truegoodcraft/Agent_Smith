@@ -86,35 +86,75 @@ export interface LighthouseReport {
 
 /**
  * A type guard to validate if an object conforms to the LighthouseReport structure.
- * It checks for the presence and types of the required fields.
+ * LENIENT validation: Only requires core fields (today.{update_checks, downloads, errors} and optionally last_7_days with same fields).
+ * All other sections are optional and ignored if malformed.
+ * Unknown top-level keys are tolerated.
  */
 export function isLighthouseReport(data: any): data is LighthouseReport {
   if (!data || typeof data !== 'object') {
     return false;
   }
 
-  const hasToday = 'today' in data && isReportWindow(data.today);
+  // REQUIRED: today with the three core metric fields
+  const hasToday = 'today' in data && isCoreReportWindow(data.today);
   if (!hasToday) {
+    console.warn('[REPORT_VALIDATION_WARN] Missing or invalid today section with core fields (update_checks, downloads, errors)');
     return false;
   }
 
-  const hasOptionalYesterday = !('yesterday' in data) || isReportWindow(data.yesterday);
-  const hasOptionalLast7Days = !('last_7_days' in data) || isReportWindow(data.last_7_days);
-  const hasOptionalMonthToDate = !('month_to_date' in data) || isReportWindow(data.month_to_date);
-  const hasOptionalTraffic = !('traffic' in data) || isReportTraffic(data.traffic);
-  const hasOptionalHumanTraffic = !('human_traffic' in data) || isReportHumanTraffic(data.human_traffic);
+  // OPTIONAL: last_7_days, but if present must have the three core metric fields
+  const hasOptionalLast7Days = !('last_7_days' in data) || isCoreReportWindow(data.last_7_days);
+  if (!hasOptionalLast7Days) {
+    console.warn('[REPORT_VALIDATION_WARN] Skipping last_7_days; present but missing core fields (update_checks, downloads, errors)');
+  }
 
+  // OPTIONAL: yesterday - only validate if present
+  if ('yesterday' in data && !isCoreReportWindow(data.yesterday)) {
+    console.warn('[REPORT_VALIDATION_WARN] yesterday present but not a valid ReportWindow; will be skipped');
+  }
+
+  // OPTIONAL: month_to_date - only validate if present
+  if ('month_to_date' in data && !isCoreReportWindow(data.month_to_date)) {
+    console.warn('[REPORT_VALIDATION_WARN] month_to_date present but not a valid ReportWindow; will be skipped');
+  }
+
+  // OPTIONAL: traffic - only validate narrowly if present
+  if ('traffic' in data && !isReportTrafficNarrow(data.traffic)) {
+    console.warn('[REPORT_VALIDATION_WARN] traffic present but does not match expected structure; will be skipped');
+  }
+
+  // OPTIONAL: human_traffic - only validate narrowly if present
+  if ('human_traffic' in data && !isReportHumanTrafficNarrow(data.human_traffic)) {
+    console.warn('[REPORT_VALIDATION_WARN] human_traffic present but does not match expected structure; will be skipped');
+  }
+
+  // OPTIONAL: trends - ignored
+  // OPTIONAL: observability - ignored
+  // OPTIONAL: any unknown top-level keys - ignored
+
+  // Success: We have the required today section with core fields, and optional sections don't fail us
+  return hasOptionalLast7Days;
+}
+
+/**
+ * Core metric fields validator (narrow): checks only for update_checks, downloads, errors.
+ * Used for required and core-optional sections.
+ */
+function isCoreReportWindow(data: any): data is ReportWindow {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
   return (
-    hasOptionalYesterday &&
-    hasOptionalLast7Days &&
-    hasOptionalMonthToDate &&
-    hasOptionalTraffic &&
-    hasOptionalHumanTraffic
+    typeof data.update_checks === 'number' &&
+    typeof data.downloads === 'number' &&
+    typeof data.errors === 'number'
   );
 }
 
 /**
  * A type guard to validate if an object conforms to the ReportWindow structure.
+ * Checks for all three fields: update_checks, downloads, errors.
+ * NOTE: See isCoreReportWindow for the lenient version used in validation.
  */
 function isReportWindow(data: any): data is ReportWindow {
     if (!data || typeof data !== 'object') {
@@ -125,6 +165,76 @@ function isReportWindow(data: any): data is ReportWindow {
         typeof data.downloads === 'number' &&
         typeof data.errors === 'number'
     );
+}
+
+/**
+ * Narrow validator for the traffic section (optional).
+ * Only validates the structure that /report actually uses:
+ * latest_day.day, latest_day.captured_at, latest_day.requests, latest_day.visits
+ * last_7_days.requests, last_7_days.visits, last_7_days.avg_daily_requests, last_7_days.avg_daily_visits, last_7_days.days_with_data
+ * If any of these critical fields are missing or malformed, returns false and traffic will be skipped.
+ */
+function isReportTrafficNarrow(data: any): boolean {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+
+  // Check latest_day section minimally
+  if ('latest_day' in data) {
+    const ld = data.latest_day;
+    if (!ld || typeof ld !== 'object') return false;
+    // latest_day is used in formatting, check it has expected shape
+    if (!('day' in ld && 'visits' in ld && 'requests' in ld && 'captured_at' in ld)) return false;
+  }
+
+  // Check last_7_days section minimally
+  if ('last_7_days' in data) {
+    const l7d = data.last_7_days;
+    if (!l7d || typeof l7d !== 'object') return false;
+    // last_7_days must have the fields /report uses
+    if (!('visits' in l7d && 'requests' in l7d && 'avg_daily_visits' in l7d && 'avg_daily_requests' in l7d && 'days_with_data' in l7d)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Narrow validator for the human_traffic section (optional).
+ * Validates the structure minimally: today.pageviews, last_7_days.pageviews, observability.accepted.
+ * If any of these critical fields are missing or malformed, returns false and human_traffic will be skipped.
+ */
+function isReportHumanTrafficNarrow(data: any): boolean {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+
+  // Check today minimally
+  if ('today' in data) {
+    const today = data.today;
+    if (!today || typeof today !== 'object') return false;
+    if (typeof today.pageviews !== 'number') return false;
+  }
+
+  // Check last_7_days minimally
+  if ('last_7_days' in data) {
+    const l7d = data.last_7_days;
+    if (!l7d || typeof l7d !== 'object') return false;
+    if (typeof l7d.pageviews !== 'number' || typeof l7d.days_with_data !== 'number') return false;
+    if (!Array.isArray(l7d.top_paths) || !Array.isArray(l7d.top_referrers) || !Array.isArray(l7d.top_sources)) return false;
+  }
+
+  // Check observability minimally
+  if ('observability' in data) {
+    const obs = data.observability;
+    if (!obs || typeof obs !== 'object') return false;
+    if (typeof obs.accepted !== 'number' || typeof obs.dropped_rate_limited !== 'number' || typeof obs.dropped_invalid !== 'number') {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function isNullableNumber(data: unknown): data is number | null {

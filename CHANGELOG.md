@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.1] — 2026-03-25
+
+### Fixed
+
+*   **`/report` validation too strict for live Lighthouse payload**: Relaxed schema validation in `src/types/telemetry.ts` to accept Lighthouse responses with varying optional section shapes. Only required fields now: `today` with `update_checks`, `downloads`, `errors`; optional `last_7_days` with the same three core fields if present. All other sections (`yesterday`, `month_to_date`, `trends`, `traffic`, `human_traffic`, `observability`) are now treated as optional and validated narrowly; if malformed, they are safely skipped rather than failing validation.
+*   **Unknown top-level keys now tolerated**: Lighthouse responses with extra top-level keys no longer cause schema validation failure.
+*   **Narrow validation for optional sections**: Added `isReportTrafficNarrow()` and `isReportHumanTrafficNarrow()` to validate only the fields `/report` actually uses. Optional sections that mismatch expected structure are logged with a warning and skipped rather than failing the entire request.
+*   **Debug logging preserved**: Kept existing diagnostic logs (fetch, JSON parse, validation stages) for operator triage during this debug pass.
+
 ## [0.6.0] — 2026-03-25
 
 ### Added
@@ -18,6 +27,7 @@
     - `[REPORT_VALIDATION_FAIL]`: Payload failed validation (logged on failure)
     - `[REPORT_FORMAT_OK]`: Report formatted successfully for Discord
     - `[REPORT_FORMAT_FAIL]`: Formatting exception (logged on failure)
+
 
 ## [0.5.9] — 2026-03-25
 

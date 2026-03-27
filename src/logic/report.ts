@@ -3,6 +3,7 @@
 import {
   LighthouseReport,
   ReportHumanTraffic,
+  ReportIdentity,
   ReportTraffic,
   ReportWindow,
   SelectedReport,
@@ -21,6 +22,7 @@ export function selectReportWindow(payload: LighthouseReport): SelectedReport {
       yesterday: payload.yesterday,
       traffic: payload.traffic,
       human_traffic: payload.human_traffic,
+      identity: payload.identity,
     };
   }
   return {
@@ -30,6 +32,7 @@ export function selectReportWindow(payload: LighthouseReport): SelectedReport {
     yesterday: payload.yesterday,
     traffic: payload.traffic,
     human_traffic: payload.human_traffic,
+    identity: payload.identity,
   };
 }
 
@@ -88,6 +91,23 @@ function formatNullableValue(value: number | string | null): string {
   }
 
   return String(value);
+}
+
+function formatNullableNumber(value?: number | null): string {
+  if (typeof value !== 'number') {
+    return 'unavailable';
+  }
+
+  return String(value);
+}
+
+function formatReturnRate(value?: number | null): string {
+  if (typeof value !== 'number') {
+    return 'unavailable';
+  }
+
+  const percentage = value <= 1 ? value * 100 : value;
+  return `${percentage.toFixed(1)}%`;
 }
 
 function formatTrafficSection(traffic?: ReportTraffic): string {
@@ -158,6 +178,100 @@ function formatHumanObservabilitySection(humanTraffic: ReportHumanTraffic): stri
   ].join('\n');
 }
 
+function formatIdentitySection(identity: ReportIdentity): string {
+  const topReturningSources = identity.top_sources_by_returning_users.length > 0
+    ? identity.top_sources_by_returning_users.map((entry) => `- ${entry.source} (${entry.users})`).join('\n')
+    : '- none';
+
+  return [
+    '**Identity**',
+    `- New users (today): ${formatNullableNumber(identity.today?.new_users)}`,
+    `- Returning users (today): ${formatNullableNumber(identity.today?.returning_users)}`,
+    `- Sessions (today): ${formatNullableNumber(identity.today?.sessions)}`,
+    `- New users (7d): ${formatNullableNumber(identity.last_7_days?.new_users)}`,
+    `- Returning users (7d): ${formatNullableNumber(identity.last_7_days?.returning_users)}`,
+    `- Sessions (7d): ${formatNullableNumber(identity.last_7_days?.sessions)}`,
+    `- Return rate (7d): ${formatReturnRate(identity.last_7_days?.return_rate)}`,
+    'Top Sources by Returning Users:',
+    topReturningSources,
+  ].join('\n');
+}
+
+function isTinyIdentitySignal(identity: ReportIdentity): boolean {
+  const todayReturning = identity.today?.returning_users;
+  const sevenDayReturning = identity.last_7_days?.returning_users;
+  const todayNewUsers = identity.today?.new_users;
+  const sevenDayNewUsers = identity.last_7_days?.new_users;
+  const knownValues = [todayReturning, sevenDayReturning, todayNewUsers, sevenDayNewUsers]
+    .filter((value): value is number => typeof value === 'number');
+
+  return knownValues.length > 0 && Math.max(...knownValues) <= 2;
+}
+
+export function getIdentityReadLines(identity?: ReportIdentity): string[] {
+  if (!identity) {
+    return [];
+  }
+
+  const lines: string[] = [];
+  const todayReturning = identity.today?.returning_users;
+  const sevenDayReturning = identity.last_7_days?.returning_users;
+  const todayNewUsers = identity.today?.new_users;
+  const sevenDayNewUsers = identity.last_7_days?.new_users;
+  const todaySessions = identity.today?.sessions;
+  const sevenDaySessions = identity.last_7_days?.sessions;
+  const returningSourceLeader = identity.top_sources_by_returning_users
+    .filter((entry) => entry.users > 0)
+    .sort((a, b) => b.users - a.users)[0];
+  const hasKnownReturning = typeof todayReturning === 'number' || typeof sevenDayReturning === 'number';
+  const hasReturningUsersFromCounters = (typeof todayReturning === 'number' && todayReturning > 0)
+    || (typeof sevenDayReturning === 'number' && sevenDayReturning > 0);
+  const hasReturningUsers = hasReturningUsersFromCounters || Boolean(returningSourceLeader);
+  const hasAcquisitionOrActivity =
+    (typeof todayNewUsers === 'number' && todayNewUsers > 0)
+    || (typeof sevenDayNewUsers === 'number' && sevenDayNewUsers > 0)
+    || (typeof todaySessions === 'number' && todaySessions > 0)
+    || (typeof sevenDaySessions === 'number' && sevenDaySessions > 0);
+
+  if (hasReturningUsers) {
+    if (isTinyIdentitySignal(identity)) {
+      lines.push('A small but real anonymous return signal is present; repeat engagement is visible, though still too early for strong conclusions.');
+    } else {
+      lines.push('Anonymous return activity detected. Returning visitors are present in the 7-day window.');
+    }
+  } else if (hasKnownReturning && todayReturning === 0 && sevenDayReturning === 0) {
+    if (hasAcquisitionOrActivity) {
+      lines.push('Acquisition and activity are present, but no anonymous return activity is visible yet.');
+    } else {
+      lines.push('No returning anonymous visitors detected yet.');
+    }
+  }
+
+  const sevenDayDistinctUsers =
+    typeof sevenDayNewUsers === 'number' && typeof sevenDayReturning === 'number'
+      ? sevenDayNewUsers + sevenDayReturning
+      : null;
+
+  if (
+    typeof sevenDaySessions === 'number'
+    && typeof sevenDayDistinctUsers === 'number'
+    && sevenDayDistinctUsers > 0
+    && sevenDaySessions > sevenDayDistinctUsers
+  ) {
+    lines.push('Session volume exceeds distinct-user counts, suggesting revisit depth or multi-session behavior.');
+  }
+
+  if (returningSourceLeader) {
+    lines.push(`${returningSourceLeader.source} appears in returning-user attribution, making it more meaningful than raw click volume alone.`);
+  }
+
+  if (lines.length === 0) {
+    lines.push('No returning anonymous visitors detected yet.');
+  }
+
+  return lines.slice(0, 3);
+}
+
 export function getHumanTrafficRead(
   humanTraffic: ReportHumanTraffic | undefined,
   selected: ReportWindow,
@@ -205,10 +319,15 @@ export function formatReport(report: SelectedReport): string {
   const humanObservabilityBlock = report.human_traffic
     ? formatHumanObservabilitySection(report.human_traffic)
     : null;
+  const identityBlock = report.identity
+    ? formatIdentitySection(report.identity)
+    : null;
+  const identityReadLines = getIdentityReadLines(report.identity);
   const deterministicRead = [
     getCoreRead(report.selected),
     getTrafficRead(report.traffic),
     getHumanTrafficRead(report.human_traffic, report.selected, report.windowLabel),
+    ...identityReadLines,
   ]
     .filter((line): line is string => Boolean(line))
     .map((line) => `- ${line}`)
@@ -230,6 +349,13 @@ export function formatReport(report: SelectedReport): string {
       humanTrafficBlock,
       '',
       humanObservabilityBlock,
+    );
+  }
+
+  if (identityBlock) {
+    sections.push(
+      '',
+      identityBlock,
     );
   }
 

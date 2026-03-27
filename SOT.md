@@ -2,11 +2,13 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.6.3 — Telemetry syntax integrity hotfix)
+## Current Mission (v0.6.4 — Identity telemetry interpretation update)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
 
-`/report` consumes Lighthouse `/report` as the only source of truth. It now uses an explicit normalization step before formatting. Required core is only `today.update_checks`, `today.downloads`, and `today.errors`. Optional sections (`last_7_days`, `yesterday`, `month_to_date`, `traffic`, `human_traffic`, `trends`) are sanitized: valid sections are retained; invalid/malformed sections are set to `undefined`. Unknown top-level keys are ignored. Formatter and report selection consume only this normalized object, preserving the existing deterministic output shape (`Summary`, `Today`, `Traffic`, optional `Human Traffic` + `Observability`, and `Read`).
+`/report` consumes Lighthouse `/report` as the only source of truth. It uses explicit normalization before formatting. Required core is only `today.update_checks`, `today.downloads`, and `today.errors`. Optional sections (`last_7_days`, `yesterday`, `month_to_date`, `traffic`, `human_traffic`, `identity`, `trends`) are sanitized: valid sections are retained; invalid/malformed sections are set to `undefined`. Unknown top-level keys are ignored. Formatter and report selection consume only this normalized object, preserving deterministic output shape (`Summary`, `Today`, `Traffic`, optional `Human Traffic` + `Observability`, optional `Identity`, and `Read`).
+
+**[v0.6.4 Identity Support]** `/report` now accepts and interprets an optional `identity` block (anonymous new users, returning users, sessions, return rate, and top returning-user sources). Identity is additive and does not replace core counters, traffic, human traffic, or observability signals. Interpretation language is conservative by design: no retention/channel-fit/product-market-fit claims from weak counts; tiny values are framed as early signals only.
 
 **[v0.6.2 Normalization Pipeline]** `normalizeLighthouseReport()` is the authoritative parser for Lighthouse `/report`. Schema acceptance is decoupled from optional section shape by sanitizing optional sections rather than rejecting the whole payload. This removes the prior false coupling where optional `last_7_days` could block otherwise valid payloads.
 
@@ -45,7 +47,7 @@ This is a full rewrite path, not a preservation path for the previous Python imp
 | Command    | Status   | Backend                  | Description                      |
 | :--------- | :------- | :----------------------- | :------------------------------- |
 | `/health`  | Live     | None (static)            | Confirms Worker + DO operational |
-| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Compact telemetry report with optional traffic section |
+| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Compact telemetry report with optional traffic/human/identity sections |
 
 See `CONTRACTS.md` for detailed command contracts.
 

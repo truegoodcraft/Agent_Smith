@@ -50,6 +50,16 @@ Fetches and analyzes the primary telemetry report from `LIGHTHOUSE_REPORT_URL`.
     - `human_traffic.observability.dropped_rate_limited`
     - `human_traffic.observability.dropped_invalid`
     - `human_traffic.observability.last_received_at`
+  - Optional identity block:
+    - `identity.today.new_users`
+    - `identity.today.returning_users`
+    - `identity.today.sessions`
+    - `identity.last_7_days.new_users`
+    - `identity.last_7_days.returning_users`
+    - `identity.last_7_days.sessions`
+    - `identity.last_7_days.return_rate`
+    - `identity.top_sources_by_returning_users[].source`
+    - `identity.top_sources_by_returning_users[].users`
 - **Deterministic Output Expectations**:
   - The message content must be a structured report adhering to the following format:
     ```
@@ -92,16 +102,31 @@ Fetches and analyzes the primary telemetry report from `LIGHTHOUSE_REPORT_URL`.
     - Dropped (rate limited): [count]
     - Dropped (invalid): [count]
 
+    **Identity**
+    - New users (today): [count or unavailable]
+    - Returning users (today): [count or unavailable]
+    - Sessions (today): [count or unavailable]
+    - New users (7d): [count or unavailable]
+    - Returning users (7d): [count or unavailable]
+    - Sessions (7d): [count or unavailable]
+    - Return rate (7d): [percent or unavailable]
+    Top Sources by Returning Users:
+    - [source] ([users])
+
     **Read**
     - [deterministic core line]
     - [deterministic traffic line]
     - [deterministic human line]
+    - [deterministic identity line(s), when identity exists]
     ```
   - The summary section must use data from `last_7_days` if available, otherwise it must fall back to `today`.
   - The today section must always render `today` metrics.
   - If the `traffic` block is absent, the Traffic section must contain exactly `Traffic data not present in this Lighthouse report.` and the command must still succeed.
   - If the `human_traffic` block is absent, both `Human Traffic` and `Observability` sections must be omitted and the command must still succeed with the same output structure used before human traffic support.
+  - If the `identity` block is absent, the `Identity` section and identity read lines must be omitted and the command must still succeed.
+  - If `identity` exists with missing subfields, parsing must remain successful and missing values must be shown as unavailable rather than fabricated.
   - If `human_traffic` top lists are empty, corresponding `Top Paths`, `Top Referrers`, and `Top Sources` headings must be omitted.
+  - If `identity.top_sources_by_returning_users` is empty or missing, `Top Sources by Returning Users:` must show `- none`.
   - If traffic values are `null`, the report must present them honestly as unavailable and must not invent replacement values.
   - The core read line is determined by selected-window counters only:
     - `errors > 0` → `Recent error activity present; investigation recommended.`
@@ -119,6 +144,12 @@ Fetches and analyzes the primary telemetry report from `LIGHTHOUSE_REPORT_URL`.
     - selected-window `downloads > 0` and selected-window human pageviews `== 0` → includes `Downloads present without pageviews (possible direct/binary access).`
     - selected-window human pageviews `> 0` and selected-window `downloads == 0` → includes `Pageviews present without downloads (low conversion).`
     - selected-window human pageviews `> 0` and selected-window `downloads > 0` → includes `Pageviews and downloads both present (active engagement).`
+  - Optional identity read lines are shown only when `identity` exists and must remain conservative:
+    - returning users evidence (`identity.today.returning_users > 0`, `identity.last_7_days.returning_users > 0`, or positive `top_sources_by_returning_users[].users`) allows anonymous repeat-engagement language only.
+    - zero returning users with other activity allows acquisition-without-return language.
+    - sessions greater than distinct users allows cautious revisit-depth inference.
+    - tiny counts must use restrained wording (for example: small/early signal, too early for strong conclusions).
+    - identity read lines must not claim validated retention, channel fit proof, product-market fit, or similarly overstated certainty.
   - If the fetch or validation fails, an ephemeral error message is shown instead.
 
 ## Deferred Commands

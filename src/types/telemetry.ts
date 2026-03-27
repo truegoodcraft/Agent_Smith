@@ -70,6 +70,30 @@ export interface ReportHumanTraffic {
   observability: ReportHumanObservability;
 }
 
+export interface ReportIdentityWindow {
+  new_users: number | null;
+  returning_users: number | null;
+  sessions: number | null;
+}
+
+export interface ReportIdentityLast7Days {
+  new_users: number | null;
+  returning_users: number | null;
+  sessions: number | null;
+  return_rate: number | null;
+}
+
+export interface ReportIdentityTopSource {
+  source: string;
+  users: number;
+}
+
+export interface ReportIdentity {
+  today?: ReportIdentityWindow;
+  last_7_days?: ReportIdentityLast7Days;
+  top_sources_by_returning_users: ReportIdentityTopSource[];
+}
+
 /**
  * The expected structure of the JSON payload from the Lighthouse /report endpoint.
  */
@@ -80,6 +104,7 @@ export interface LighthouseReport {
   month_to_date?: ReportWindow;
   traffic?: ReportTraffic;
   human_traffic?: ReportHumanTraffic;
+  identity?: ReportIdentity;
   trends?: unknown;
   // Other fields from the API can be added here but are not used by the /report command.
 }
@@ -91,6 +116,7 @@ export interface SelectedReport {
   yesterday?: ReportWindow;
   traffic?: ReportTraffic;
   human_traffic?: ReportHumanTraffic;
+  identity?: ReportIdentity;
 }
 
 /**
@@ -135,6 +161,11 @@ export function isLighthouseReport(data: any): data is LighthouseReport {
   // OPTIONAL: human_traffic - only validate narrowly if present
   if ('human_traffic' in data && !isReportHumanTrafficNarrow(data.human_traffic)) {
     console.warn('[REPORT_VALIDATION_WARN] human_traffic present but does not match expected structure; will be skipped');
+  }
+
+  // OPTIONAL: identity - partial subfields are accepted and normalized.
+  if ('identity' in data && !isReportIdentityNarrow(data.identity)) {
+    console.warn('[REPORT_VALIDATION_WARN] identity present but does not match expected structure; will be skipped');
   }
 
   // OPTIONAL: trends - ignored
@@ -248,6 +279,101 @@ function isReportHumanTrafficNarrow(data: any): boolean {
 }
 
 /**
+ * Narrow validator for optional identity block.
+ * Allows partial blocks and defers field-level fallback handling to normalization.
+ */
+function isReportIdentityNarrow(data: any): boolean {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+
+  const record = data as Record<string, unknown>;
+
+  if ('today' in record && !isReportIdentityWindowNarrow(record.today)) {
+    return false;
+  }
+
+  if ('last_7_days' in record && !isReportIdentityLast7DaysNarrow(record.last_7_days)) {
+    return false;
+  }
+
+  if ('top_sources_by_returning_users' in record && !Array.isArray(record.top_sources_by_returning_users)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isReportIdentityWindowNarrow(data: unknown): boolean {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+
+  const record = data as Record<string, unknown>;
+  return (
+    (!('new_users' in record) || typeof record.new_users === 'number' || record.new_users === null) &&
+    (!('returning_users' in record) || typeof record.returning_users === 'number' || record.returning_users === null) &&
+    (!('sessions' in record) || typeof record.sessions === 'number' || record.sessions === null)
+  );
+}
+
+function isReportIdentityLast7DaysNarrow(data: unknown): boolean {
+  if (!isReportIdentityWindowNarrow(data)) {
+    return false;
+  }
+
+  const record = data as Record<string, unknown>;
+  return !('return_rate' in record) || typeof record.return_rate === 'number' || record.return_rate === null;
+}
+
+function normalizeIdentityWindow(data: unknown): ReportIdentityWindow | undefined {
+  if (!data || typeof data !== 'object') {
+    return undefined;
+  }
+
+  const record = data as Record<string, unknown>;
+  return {
+    new_users: typeof record.new_users === 'number' ? record.new_users : null,
+    returning_users: typeof record.returning_users === 'number' ? record.returning_users : null,
+    sessions: typeof record.sessions === 'number' ? record.sessions : null,
+  };
+}
+
+function normalizeIdentityLast7Days(data: unknown): ReportIdentityLast7Days | undefined {
+  if (!data || typeof data !== 'object') {
+    return undefined;
+  }
+
+  const record = data as Record<string, unknown>;
+  return {
+    new_users: typeof record.new_users === 'number' ? record.new_users : null,
+    returning_users: typeof record.returning_users === 'number' ? record.returning_users : null,
+    sessions: typeof record.sessions === 'number' ? record.sessions : null,
+    return_rate: typeof record.return_rate === 'number' ? record.return_rate : null,
+  };
+}
+
+function normalizeIdentityTopSources(data: unknown): ReportIdentityTopSource[] {
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    .filter((entry) => typeof entry.source === 'string' && typeof entry.users === 'number')
+    .map((entry) => ({ source: entry.source as string, users: entry.users as number }));
+}
+
+function normalizeReportIdentity(data: unknown): ReportIdentity {
+  const record = data as Record<string, unknown>;
+  return {
+    today: normalizeIdentityWindow(record.today),
+    last_7_days: normalizeIdentityLast7Days(record.last_7_days),
+    top_sources_by_returning_users: normalizeIdentityTopSources(record.top_sources_by_returning_users),
+  };
+}
+
+/**
  * Normalizes an unknown Lighthouse payload into a safe, formatter-ready LighthouseReport.
  * Required core: today.update_checks, today.downloads, today.errors.
  * Optional sections are sanitized: invalid/malformed optional blocks become undefined.
@@ -272,6 +398,7 @@ export function normalizeLighthouseReport(data: unknown): LighthouseReport | nul
     month_to_date: undefined,
     traffic: undefined,
     human_traffic: undefined,
+    identity: undefined,
     trends: undefined,
   };
 
@@ -317,6 +444,15 @@ export function normalizeLighthouseReport(data: unknown): LighthouseReport | nul
       normalized.human_traffic = record.human_traffic as ReportHumanTraffic;
     } else {
       console.warn('[REPORT_VALIDATION_WARN] human_traffic present but invalid; sanitized to undefined');
+    }
+  }
+
+  // OPTIONAL: identity
+  if ('identity' in record) {
+    if (isReportIdentityNarrow(record.identity)) {
+      normalized.identity = normalizeReportIdentity(record.identity);
+    } else {
+      console.warn('[REPORT_VALIDATION_WARN] identity present but invalid; sanitized to undefined');
     }
   }
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.4] — 2026-03-26
+
+### Added
+
+*   **Optional `identity` block support for `/report`**: Extended `src/types/telemetry.ts` to parse and normalize Lighthouse identity telemetry (`today`, `last_7_days`, and `top_sources_by_returning_users`) as an additive optional section.
+*   **Identity summary rendering**: Extended `src/logic/report.ts` to render a dedicated `Identity` section with today/7d new users, returning users, sessions, return rate, and top sources by returning users.
+*   **Conservative identity read-lines**: Added identity-aware interpretation lines for anonymous return activity, early/tiny-signal language, sessions-vs-users depth inference, and source-quality signaling from returning-user attribution.
+
+### Changed
+
+*   **Partial identity field tolerance**: Identity parsing now accepts missing subfields without failing the report; missing numeric values render as `unavailable` rather than fabricated values.
+*   **No-regression fallback behavior preserved**: Reports without `identity` continue to render in the existing style with no identity claims.
+*   **Contract alignment**: Updated `CONTRACTS.md` to document consumed identity fields, rendered output shape, and conservative language guardrails for interpretation.
+
 ## [0.6.3] — 2026-03-25
 
 ### Fixed

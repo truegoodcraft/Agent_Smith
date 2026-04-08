@@ -9,6 +9,11 @@ async function handle(interaction, env) {
 }
 export const health = {
     name: 'health',
+    definition: {
+        name: 'health',
+        description: 'Check Smith operational status',
+        type: 1,
+    },
     handler: async (interaction, env, ctx) => {
         const responsePayload = await handle(interaction, env);
         return new Response(JSON.stringify(responsePayload), {

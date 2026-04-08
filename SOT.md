@@ -2,7 +2,7 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.7.0 — Multi-view Lighthouse report contract support)
+## Current Mission (v0.8.0 — In-repo slash command schema registration)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
 
@@ -15,6 +15,8 @@ Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixe
 - Source health: `GET /report?view=source_health`
 
 Typed payload handling is explicit for all four response families. Nulls are preserved until formatting and rendered as unavailable, never silently coerced to zero. Known Lighthouse 400 payloads (`invalid_view`, `missing_site_key`, `invalid_site_key`) map to deterministic operator-facing errors. Report handling remains deterministic-only and non-model-driven.
+
+Slash command schema is defined in repository code (`src/commands/*.ts`) and registered to Discord from `scripts/register-commands.ts`. Deployment now performs command registration automatically after successful Worker deploy, preventing runtime/schema drift.
 
 **[v0.6.4 Identity Support]** `/report` now accepts and interprets an optional `identity` block (anonymous new users, returning users, sessions, return rate, and top returning-user sources). Identity is additive and does not replace core counters, traffic, human traffic, or observability signals. Interpretation language is conservative by design: no retention/channel-fit/product-market-fit claims from weak counts; tiny values are framed as early signals only.
 
@@ -61,7 +63,7 @@ See `CONTRACTS.md` for detailed command contracts.
 
 ## Deployment
 
--   **Production:** GitHub Actions → Cloudflare via `wrangler-action`. See `.github/workflows/deploy.yml`.
+-   **Production:** GitHub Actions → Cloudflare via `wrangler-action`, then Discord slash command registration via `npm run register:commands`. See `.github/workflows/deploy.yml`.
 -   **Gate:** CI workflow runs type-check + governance checks before deploy.
 -   **Local:** `npm start` → `wrangler dev` with `.dev.vars` for secrets/URLs.
 -   **No local-machine dependency** for production deployment.

@@ -10,6 +10,7 @@ import {
 } from '../src/types/telemetry';
 import { formatLighthouseReport } from '../src/logic/report';
 import { getLighthouseReport, LighthouseError } from '../src/services/lighthouse';
+import { commandDefinitions } from '../src/commands';
 
 function withMockFetch(mockImpl: typeof globalThis.fetch, fn: () => Promise<void>): Promise<void> {
   const original = globalThis.fetch;
@@ -206,4 +207,16 @@ test('legacy report path still formats', () => {
 test('report command remains deterministic and non-model-driven', () => {
   const source = fs.readFileSync('src/commands/report.ts', 'utf8');
   assert.doesNotMatch(source, /model|ollama|llm/i);
+});
+
+test('command registration payload includes health and report with report view/site options', () => {
+  const names = commandDefinitions.map((definition) => definition.name).sort();
+  assert.deepEqual(names, ['health', 'report']);
+
+  const reportDefinition = commandDefinitions.find((definition) => definition.name === 'report');
+  assert.ok(reportDefinition);
+  assert.ok(reportDefinition.options);
+
+  const optionNames = reportDefinition.options.map((option) => option.name).sort();
+  assert.deepEqual(optionNames, ['site', 'view']);
 });

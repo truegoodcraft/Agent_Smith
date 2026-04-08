@@ -128,6 +128,36 @@ async function handle(interaction: APIApplicationCommandInteraction, env: Env): 
 
 export const report: Command = {
   name: 'report',
+  definition: {
+    name: 'report',
+    description: 'Fetch Lighthouse report views',
+    type: 1,
+    options: [
+      {
+        name: 'view',
+        description: 'Report view',
+        type: 3,
+        required: false,
+        choices: [
+          { name: 'legacy', value: 'legacy' },
+          { name: 'fleet', value: 'fleet' },
+          { name: 'site', value: 'site' },
+          { name: 'source_health', value: 'source_health' },
+        ],
+      },
+      {
+        name: 'site',
+        description: 'Site key for site view',
+        type: 3,
+        required: false,
+        choices: [
+          { name: 'buscore', value: 'buscore' },
+          { name: 'tgc_site', value: 'tgc_site' },
+          { name: 'star_map_generator', value: 'star_map_generator' },
+        ],
+      },
+    ],
+  },
   handler: async (interaction, env, ctx) => {
     const responsePayload = await handle(interaction, env);
     return new Response(JSON.stringify(responsePayload), {

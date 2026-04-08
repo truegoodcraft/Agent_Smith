@@ -2,6 +2,7 @@ import {
   APIApplicationCommandInteraction,
   APIPingInteraction,
   InteractionType,
+  RESTPostAPIApplicationCommandsJSONBody,
 } from 'discord-api-types/v10';
 
 /**
@@ -27,6 +28,7 @@ export interface Env {
  */
 export interface Command {
   name: string;
+  definition: RESTPostAPIApplicationCommandsJSONBody;
   handler: (interaction: APIApplicationCommandInteraction, env: Env, ctx: ExecutionContext) => Promise<Response>;
 }
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0] — 2026-04-08
+
+### Added
+
+*   **Automated Discord slash command registration**: Added `scripts/register-commands.ts` to register the full live command surface directly from repository command definitions using `DISCORD_APPLICATION_ID` and `DISCORD_BOT_TOKEN`.
+*   **Dry-run registration mode**: Added `npm run register:commands:dry-run` to validate and print the exact payload without sending it to Discord.
+*   **Code-owned command schema source of truth**: Added per-command `definition` payloads in `src/commands/health.ts` and `src/commands/report.ts`, and exported aggregate `commandDefinitions` from `src/commands/index.ts`.
+
+### Changed
+
+*   **Deploy workflow now syncs schema after deploy**: `.github/workflows/deploy.yml` now runs `npm run register:commands` after successful Cloudflare deployment.
+*   **`/report` schema now codified in command definition**: Registration payload now includes `view` and `site` options directly from repo code, aligned with runtime behavior.
+*   **Documentation alignment**: Updated `README.md` and `SOT.md` to document automated registration and in-repo schema authority.
+
 ## [0.7.0] — 2026-04-08
 
 ### Added

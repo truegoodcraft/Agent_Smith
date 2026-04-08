@@ -76,6 +76,8 @@ Push to `main` triggers the deploy workflow. Required GitHub Secrets:
 | `DISCORD_BOT_TOKEN`      | Pushed as Worker secret (command registration) |
 | `LIGHTHOUSE_ADMIN_TOKEN` | Pushed as Worker secret for backend auth |
 
+After the Worker deploy step succeeds, the workflow now runs `npm run register:commands` to sync slash command schema to Discord using repository-defined command definitions.
+
 ### Cloudflare Environment Variables
 
 Set in `wrangler.toml` `[vars]` before deploying:
@@ -96,46 +98,12 @@ Requires `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in environment.
 1. Create a Discord application at https://discord.com/developers/applications
 2. Under **General Information**, copy the Application ID and Public Key
 3. Create a bot user under **Bot**, copy the token
-4. Register slash commands using the Discord API (a one-time HTTP call using `DISCORD_APPLICATION_ID` and `DISCORD_BOT_TOKEN`):
+4. Set `DISCORD_APPLICATION_ID` and `DISCORD_BOT_TOKEN` in your environment and run command registration from repo code:
    ```bash
-   curl -X PUT \
-     "https://discord.com/api/v10/applications/YOUR_APP_ID/commands" \
-     -H "Authorization: Bot YOUR_BOT_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '[
-       {"name":"health","description":"Check Smith operational status","type":1},
-       {
-         "name":"report",
-         "description":"Fetch Lighthouse report views",
-         "type":1,
-         "options":[
-           {
-             "name":"view",
-             "description":"Report view",
-             "type":3,
-             "required":false,
-             "choices":[
-               {"name":"legacy","value":"legacy"},
-               {"name":"fleet","value":"fleet"},
-               {"name":"site","value":"site"},
-               {"name":"source_health","value":"source_health"}
-             ]
-           },
-           {
-             "name":"site",
-             "description":"Site key for site view",
-             "type":3,
-             "required":false,
-             "choices":[
-               {"name":"buscore","value":"buscore"},
-               {"name":"tgc_site","value":"tgc_site"},
-               {"name":"star_map_generator","value":"star_map_generator"}
-             ]
-           }
-         ]
-       }
-     ]'
+   npm run register:commands:dry-run  # inspect payload only
+   npm run register:commands          # PUT payload to Discord
    ```
+   Command schema source of truth is in `src/commands/*.ts` via each command's `definition` object.
 5. Under **General Information** → **Interactions Endpoint URL**, set it to your Worker URL (e.g., `https://agent-smith.your-account.workers.dev`)
 6. Discord will send a PING to validate the endpoint. The Worker handles this automatically.
 7. Invite the bot to your server using an OAuth2 URL with the `applications.commands` scope.

@@ -604,3 +604,252 @@ test('command registration payload includes health and report with report site/v
   const optionNames = reportDefinition.options.map((option) => option.name).sort();
   assert.deepEqual(optionNames, ['site', 'view']);
 });
+
+test('site report summary displays all expanded fields when present', () => {
+  const payload = {
+    view: 'site' as const,
+    generated_at: '2026-04-08T00:00:00Z',
+    scope: {
+      site_key: 'buscore',
+      label: 'BUS Core',
+      backend_source: 'lighthouse',
+      cloudflare_traffic_enabled: true,
+    },
+    summary: {
+      pageviews_7d: 100,
+      requests_7d: 150,
+      visits_7d: 80,
+      accepted_events_7d: 42,
+      last_received_at: '2026-04-08T20:00:00Z',
+      has_recent_signal: true,
+    },
+    traffic: { latest_day: null, last_7_days: null },
+    events: null,
+    health: null,
+  };
+
+  const parsed = normalizeSiteLighthouseReport(payload);
+  assert.ok(parsed);
+  assert.equal(parsed.summary?.accepted_events_7d, 42);
+  assert.equal(parsed.summary?.last_received_at, '2026-04-08T20:00:00Z');
+  assert.equal(parsed.summary?.has_recent_signal, true);
+
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /Accepted events 7d: 42/);
+  assert.match(output, /Last received: 2026-04-08T20:00:00Z/);
+  assert.match(output, /Signal state: recent/);
+});
+
+test('site report events section displays event details when present', () => {
+  const payload = {
+    view: 'site' as const,
+    generated_at: '2026-04-08T00:00:00Z',
+    scope: { site_key: 'star_map_generator', label: 'Star Map Generator' },
+    summary: null,
+    traffic: null,
+    events: {
+      accepted_signal_7d: 50,
+      accepted_events: 48,
+      unique_paths: 12,
+      has_recent_signal: true,
+      last_received_at: '2026-04-08T20:01:00Z',
+      by_event_name: { click: 30, view: 18 },
+      top_sources: [
+        { name: 'github', count: 25 },
+        { name: 'twitter', count: 15 },
+      ],
+      top_campaigns: [{ name: 'spring_launch', count: 40 }],
+      top_referrers: [{ name: 'example.com', count: 35 }],
+    },
+    health: null,
+  };
+
+  const parsed = normalizeSiteLighthouseReport(payload);
+  assert.ok(parsed);
+  assert.equal(parsed.events?.accepted_signal_7d, 50);
+  assert.equal(parsed.events?.accepted_events, 48);
+  assert.equal(parsed.events?.unique_paths, 12);
+  assert.ok(parsed.events?.by_event_name);
+  assert.equal(parsed.events.by_event_name.click, 30);
+
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /Accepted signal 7d: 50/);
+  assert.match(output, /Accepted events: 48/);
+  assert.match(output, /Unique paths: 12/);
+  assert.match(output, /By Event Name:/);
+  assert.match(output, /click \(30\)/);
+  assert.match(output, /Top sources:/);
+  assert.match(output, /github \(25\)/);
+  assert.match(output, /Top campaigns:/);
+  assert.match(output, /spring_launch \(40\)/);
+  assert.match(output, /Top referrers:/);
+  assert.match(output, /example.com \(35\)/);
+});
+
+test('site report health section displays all observability fields when present', () => {
+  const payload = {
+    view: 'site' as const,
+    generated_at: '2026-04-08T00:00:00Z',
+    scope: { site_key: 'tgc_site', label: 'TGC Site' },
+    summary: null,
+    traffic: null,
+    events: null,
+    health: {
+      dropped_invalid: 10,
+      dropped_rate_limited: 5,
+      last_received_at: '2026-04-08T20:02:00Z',
+      included_events: 500,
+      excluded_test_mode: 2,
+      excluded_non_production_host: 3,
+      cloudflare_traffic_enabled: true,
+      production_only_default: true,
+    },
+  };
+
+  const parsed = normalizeSiteLighthouseReport(payload);
+  assert.ok(parsed);
+  assert.equal(parsed.health?.dropped_invalid, 10);
+  assert.equal(parsed.health?.dropped_rate_limited, 5);
+  assert.equal(parsed.health?.last_received_at, '2026-04-08T20:02:00Z');
+  assert.equal(parsed.health?.included_events, 500);
+  assert.equal(parsed.health?.excluded_test_mode, 2);
+  assert.equal(parsed.health?.excluded_non_production_host, 3);
+  assert.equal(parsed.health?.cloudflare_traffic_enabled, true);
+  assert.equal(parsed.health?.production_only_default, true);
+
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /Dropped invalid: 10/);
+  assert.match(output, /Dropped rate limited: 5/);
+  assert.match(output, /Last received: 2026-04-08T20:02:00Z/);
+  assert.match(output, /Included events: 500/);
+  assert.match(output, /Excluded test mode: 2/);
+  assert.match(output, /Excluded non-prod host: 3/);
+  assert.match(output, /Cloudflare traffic enabled: true/);
+  assert.match(output, /Production only default: true/);
+});
+
+test('site report displays identity section when present', () => {
+  const payload = {
+    view: 'site' as const,
+    generated_at: '2026-04-08T00:00:00Z',
+    scope: { site_key: 'buscore', label: 'BUS Core' },
+    summary: null,
+    traffic: null,
+    events: null,
+    health: null,
+    identity: {
+      today: { new_users: 5, returning_users: 3, sessions: 8 },
+      last_7_days: { new_users: 25, returning_users: 15, sessions: 45, return_rate: 0.375 },
+      top_sources_by_returning_users: [
+        { source: 'direct', users: 8 },
+        { source: 'github', users: 5 },
+      ],
+    },
+  };
+
+  const parsed = normalizeSiteLighthouseReport(payload);
+  assert.ok(parsed);
+  assert.ok(parsed.identity);
+  assert.equal(parsed.identity.today?.new_users, 5);
+  assert.equal(parsed.identity.last_7_days?.return_rate, 0.375);
+
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /\*\*Identity\*\*/);
+  assert.match(output, /New users \(today\): 5/);
+  assert.match(output, /Returning users \(today\): 3/);
+  assert.match(output, /Sessions \(today\): 8/);
+  assert.match(output, /New users \(7d\): 25/);
+  assert.match(output, /Return rate \(7d\): 37.5%/);
+  assert.match(output, /Top Sources by Returning Users:/);
+  assert.match(output, /direct \(8\)/);
+});
+
+test('traffic section includes cloudflare_traffic_enabled from traffic payload', () => {
+  const payload = {
+    view: 'site' as const,
+    generated_at: null,
+    scope: { site_key: 'star_map_generator' },
+    summary: null,
+    traffic: {
+      cloudflare_traffic_enabled: false,
+      latest_day: null,
+      last_7_days: { requests: 22, visits: 20 },
+    },
+    events: null,
+    health: null,
+  };
+
+  const parsed = normalizeSiteLighthouseReport(payload);
+  assert.ok(parsed);
+  assert.equal(parsed.traffic?.cloudflare_traffic_enabled, false);
+
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /\*\*Traffic\*\*/);
+  assert.match(output, /Cloudflare traffic enabled: false/);
+  assert.match(output, /Requests 7d: 22/);
+  assert.match(output, /Visits 7d: 20/);
+});
+
+test('site report aliases are normalized in all relevant sections', () => {
+  const payload = {
+    view: 'site' as const,
+    generated_at: null,
+    scope: { site_key: 'buscore', traffic_enabled: true },
+    summary: {
+      accepted_events_7d: 15,
+      last_received: '2026-04-08T21:00:00Z',
+    },
+    traffic: { traffic_enabled: false },
+    events: {
+      accepted_events_7d: 12,
+      last_received: '2026-04-08T21:05:00Z',
+    },
+    health: {
+      traffic_enabled: true,
+      last_received: '2026-04-08T21:10:00Z',
+    },
+  };
+
+  const parsed = normalizeSiteLighthouseReport(payload);
+  assert.ok(parsed);
+  // Check aliases are resolved
+  assert.equal(parsed.scope?.cloudflare_traffic_enabled, true);
+  assert.equal(parsed.summary?.accepted_events_7d, 15);
+  assert.equal(parsed.summary?.last_received_at, '2026-04-08T21:00:00Z');
+  assert.equal(parsed.traffic?.cloudflare_traffic_enabled, false);
+  // Events normalizes accepted_events_7d to accepted_signal_7d
+  assert.equal(parsed.events?.accepted_signal_7d, 12);
+  assert.equal(parsed.events?.last_received_at, '2026-04-08T21:05:00Z');
+  assert.equal(parsed.health?.cloudflare_traffic_enabled, true);
+  assert.equal(parsed.health?.last_received_at, '2026-04-08T21:10:00Z');
+});
+
+test('null event details render as unavailable, not as zeros or dropped', () => {
+  const payload = {
+    view: 'site' as const,
+    generated_at: null,
+    scope: { site_key: 'tgc_site' },
+    summary: null,
+    traffic: null,
+    events: {
+      accepted_signal_7d: 0,
+      accepted_events: null,
+      unique_paths: null,
+      by_event_name: null,
+      top_sources: null,
+      top_campaigns: null,
+      top_referrers: null,
+    },
+    health: null,
+  };
+
+  const parsed = normalizeSiteLighthouseReport(payload);
+  assert.ok(parsed);
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /Accepted signal 7d: 0/);
+  assert.match(output, /Accepted events: unavailable/);
+  assert.match(output, /Unique paths: unavailable/);
+  assert.doesNotMatch(output, /By Event Name:/);
+  assert.doesNotMatch(output, /Top sources:/);
+});
+

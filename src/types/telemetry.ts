@@ -144,9 +144,13 @@ export interface SiteReportSummary {
   pageviews_7d?: number | null;
   requests_7d?: number | null;
   visits_7d?: number | null;
+  accepted_events_7d?: number | null;
+  last_received_at?: string | null;
+  has_recent_signal?: boolean | null;
 }
 
 export interface SiteReportTraffic {
+  cloudflare_traffic_enabled?: boolean | null;
   latest_day?: {
     day?: string | null;
     visits?: number | null;
@@ -162,15 +166,54 @@ export interface SiteReportTraffic {
   } | null;
 }
 
+export interface SiteReportEventTopItem {
+  name: string;
+  count: number;
+}
+
+export interface SiteReportEventsByName {
+  [eventName: string]: number;
+}
+
 export interface SiteReportEvents {
   accepted_signal_7d?: number | null;
+  accepted_events?: number | null;
   has_recent_signal?: boolean | null;
   last_received_at?: string | null;
+  unique_paths?: number | null;
+  by_event_name?: SiteReportEventsByName | null;
+  top_sources?: SiteReportEventTopItem[] | null;
+  top_campaigns?: SiteReportEventTopItem[] | null;
+  top_referrers?: SiteReportEventTopItem[] | null;
 }
 
 export interface SiteReportHealth {
   dropped_invalid?: number | null;
   dropped_rate_limited?: number | null;
+  last_received_at?: string | null;
+  included_events?: number | null;
+  excluded_test_mode?: number | null;
+  excluded_non_production_host?: number | null;
+  cloudflare_traffic_enabled?: boolean | null;
+  production_only_default?: boolean | null;
+}
+
+export interface SiteReportIdentity {
+  today?: {
+    new_users?: number | null;
+    returning_users?: number | null;
+    sessions?: number | null;
+  } | null;
+  last_7_days?: {
+    new_users?: number | null;
+    returning_users?: number | null;
+    sessions?: number | null;
+    return_rate?: number | null;
+  } | null;
+  top_sources_by_returning_users?: Array<{
+    source: string;
+    users: number;
+  }> | null;
 }
 
 export interface SiteLighthouseReport {
@@ -181,6 +224,7 @@ export interface SiteLighthouseReport {
   traffic: SiteReportTraffic | null;
   events: SiteReportEvents | null;
   health: SiteReportHealth | null;
+  identity?: SiteReportIdentity | null;
 }
 
 export interface SourceHealthSite {
@@ -601,10 +645,21 @@ function normalizeSiteReportSummary(data: unknown): SiteReportSummary | null {
     return null;
   }
 
+  const acceptedSignal7d = getNullableNumberFromAliases(data, 'accepted_signal_7d', [
+    'accepted_events_7d',
+  ]);
+  const lastReceivedAt = getNullableStringFromAliases(data, 'last_received_at', ['last_received']);
+
   return {
     pageviews_7d: isNullableNumber(data.pageviews_7d) ? data.pageviews_7d : undefined,
     requests_7d: isNullableNumber(data.requests_7d) ? data.requests_7d : undefined,
     visits_7d: isNullableNumber(data.visits_7d) ? data.visits_7d : undefined,
+    accepted_events_7d: acceptedSignal7d,
+    last_received_at: lastReceivedAt,
+    has_recent_signal:
+      typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
+        ? data.has_recent_signal
+        : undefined,
   };
 }
 
@@ -615,6 +670,10 @@ function normalizeSiteReportTraffic(data: unknown): SiteReportTraffic | null {
   if (!isRecord(data)) {
     return null;
   }
+
+  const cloudflareTrafficEnabled = getNullableBooleanFromAliases(data, 'cloudflare_traffic_enabled', [
+    'traffic_enabled',
+  ]);
 
   const latestDay = isRecord(data.latest_day)
     ? {
@@ -648,6 +707,7 @@ function normalizeSiteReportTraffic(data: unknown): SiteReportTraffic | null {
       : undefined;
 
   return {
+    cloudflare_traffic_enabled: cloudflareTrafficEnabled,
     latest_day: latestDay,
     last_7_days: last7Days,
   };
@@ -666,13 +726,34 @@ function normalizeSiteReportEvents(data: unknown): SiteReportEvents | null {
   ]);
   const lastReceivedAt = getNullableStringFromAliases(data, 'last_received_at', ['last_received']);
 
+  const byEventName: SiteReportEventsByName | undefined = isRecord(data.by_event_name)
+    ? (data.by_event_name as SiteReportEventsByName)
+    : undefined;
+
+  const normalizeEventTopItems = (items: unknown): SiteReportEventTopItem[] | undefined => {
+    if (!Array.isArray(items)) {
+      return undefined;
+    }
+    const normalized = items
+      .filter((item): item is Record<string, unknown> => isRecord(item))
+      .filter((item) => typeof item.name === 'string' && typeof item.count === 'number')
+      .map((item) => ({ name: item.name as string, count: item.count as number }));
+    return normalized.length > 0 ? normalized : undefined;
+  };
+
   return {
     accepted_signal_7d: acceptedSignal7d,
+    accepted_events: isNullableNumber(data.accepted_events) ? data.accepted_events : undefined,
     has_recent_signal:
       typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
         ? data.has_recent_signal
         : undefined,
     last_received_at: lastReceivedAt,
+    unique_paths: isNullableNumber(data.unique_paths) ? data.unique_paths : undefined,
+    by_event_name: byEventName,
+    top_sources: normalizeEventTopItems(data.top_sources),
+    top_campaigns: normalizeEventTopItems(data.top_campaigns),
+    top_referrers: normalizeEventTopItems(data.top_referrers),
   };
 }
 
@@ -684,9 +765,74 @@ function normalizeSiteReportHealth(data: unknown): SiteReportHealth | null {
     return null;
   }
 
+  const cloudflareTrafficEnabled = getNullableBooleanFromAliases(data, 'cloudflare_traffic_enabled', [
+    'traffic_enabled',
+  ]);
+  const lastReceivedAt = getNullableStringFromAliases(data, 'last_received_at', ['last_received']);
+
   return {
     dropped_invalid: isNullableNumber(data.dropped_invalid) ? data.dropped_invalid : undefined,
     dropped_rate_limited: isNullableNumber(data.dropped_rate_limited) ? data.dropped_rate_limited : undefined,
+    last_received_at: lastReceivedAt,
+    included_events: isNullableNumber(data.included_events) ? data.included_events : undefined,
+    excluded_test_mode: isNullableNumber(data.excluded_test_mode) ? data.excluded_test_mode : undefined,
+    excluded_non_production_host: isNullableNumber(data.excluded_non_production_host)
+      ? data.excluded_non_production_host
+      : undefined,
+    cloudflare_traffic_enabled: cloudflareTrafficEnabled,
+    production_only_default:
+      typeof data.production_only_default === 'boolean' || data.production_only_default === null
+        ? data.production_only_default
+        : undefined,
+  };
+}
+
+function normalizeSiteReportIdentity(data: unknown): SiteReportIdentity | undefined {
+  if (data === null || data === undefined) {
+    return undefined;
+  }
+  if (!isRecord(data)) {
+    return undefined;
+  }
+
+  const normalizeWindow = (window: unknown) => {
+    if (!isRecord(window)) {
+      return undefined;
+    }
+    return {
+      new_users: typeof window.new_users === 'number' || window.new_users === null ? window.new_users : undefined,
+      returning_users: typeof window.returning_users === 'number' || window.returning_users === null ? window.returning_users : undefined,
+      sessions: typeof window.sessions === 'number' || window.sessions === null ? window.sessions : undefined,
+    };
+  };
+
+  const normalizeLast7Days = (window: unknown) => {
+    if (!isRecord(window)) {
+      return undefined;
+    }
+    return {
+      new_users: typeof window.new_users === 'number' || window.new_users === null ? window.new_users : undefined,
+      returning_users: typeof window.returning_users === 'number' || window.returning_users === null ? window.returning_users : undefined,
+      sessions: typeof window.sessions === 'number' || window.sessions === null ? window.sessions : undefined,
+      return_rate: typeof window.return_rate === 'number' || window.return_rate === null ? window.return_rate : undefined,
+    };
+  };
+
+  const normalizeTopSources = (sources: unknown) => {
+    if (!Array.isArray(sources)) {
+      return undefined;
+    }
+    const normalized = sources
+      .filter((entry): entry is Record<string, unknown> => isRecord(entry))
+      .filter((entry) => typeof entry.source === 'string' && typeof entry.users === 'number')
+      .map((entry) => ({ source: entry.source as string, users: entry.users as number }));
+    return normalized.length > 0 ? normalized : undefined;
+  };
+
+  return {
+    today: normalizeWindow(data.today),
+    last_7_days: normalizeLast7Days(data.last_7_days),
+    top_sources_by_returning_users: normalizeTopSources(data.top_sources_by_returning_users),
   };
 }
 
@@ -719,6 +865,7 @@ export function normalizeSiteLighthouseReport(data: unknown): SiteLighthouseRepo
     traffic: normalizeSiteReportTraffic(data.traffic),
     events: normalizeSiteReportEvents(data.events),
     health: normalizeSiteReportHealth(data.health),
+    identity: normalizeSiteReportIdentity(data.identity),
   };
 }
 

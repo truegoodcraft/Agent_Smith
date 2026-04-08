@@ -2,7 +2,48 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.8.2 — /report field-mapping regression fix)
+## Current Mission (v0.8.3 — Site payload expansion and contract alignment)
+
+Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+**[v0.8.3 Site Payload Expansion]** The `site` view response parser and formatter now accepts and renders all available Lighthouse site payload fields:
+
+**Summary section** now includes:
+- `accepted_events_7d` (aliased from `accepted_signal_7d`)
+- `last_received_at` (aliased from `last_received`)
+- `has_recent_signal` (boolean signal health indicator)
+
+**Traffic section** now includes:
+- `cloudflare_traffic_enabled` at traffic scope (not just scope-level)
+- Full `latest_day` and `last_7_days` structures
+
+**Events section** (expanded from minimal events) now includes:
+- `accepted_signal_7d` / `accepted_events_7d` (aliased)
+- `accepted_events` (total accepted count)
+- `unique_paths` (count of unique URL paths)
+- `by_event_name` (event type distribution map)
+- `top_sources`, `top_campaigns`, `top_referrers` (top lists by name and count)
+- `last_received_at` (aliased from `last_received`)
+- `has_recent_signal` (boolean)
+
+**Observability section** (health) now includes:
+- `dropped_invalid`, `dropped_rate_limited` (event drop counts)
+- `last_received_at` (aliased from `last_received`)
+- `included_events` (count of events included in processing)
+- `excluded_test_mode`, `excluded_non_production_host` (exclusion counts)
+- `cloudflare_traffic_enabled` (aliased from `traffic_enabled`)
+- `production_only_default` (boolean production filtering flag)
+
+**Identity section** (new optional top-level) now supported:
+- `today` window: `new_users`, `returning_users`, `sessions`
+- `last_7_days` window: `new_users`, `returning_users`, `sessions`, `return_rate`
+- `top_sources_by_returning_users` (top returning-user attribution)
+
+All alias-aware field normalization is applied consistently: `accepted_signal_7d`/`accepted_events_7d`, `last_received_at`/`last_received`, `cloudflare_traffic_enabled`/`traffic_enabled` across all sections.
+
+Null semantics are preserved: missing or explicit `null` values render as unavailable and are never coerced to zero. Deterministic behavior is maintained; no LLM or model-driven interpretation is applied.
+
+## v0.8.2 Mission — /report field-mapping regression fix
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
 

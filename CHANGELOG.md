@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.8.3] — 2026-04-08
+
+### Fixed
+
+*   **Site parser now accepts and renders all Lighthouse site payload fields**: Previously Smith was dropping or not displaying available Lighthouse site report fields. Now all fields are properly parsed with alias normalization and deterministic formatting.
+*   **Summary section now displays expanded observability fields**: Added `accepted_events_7d`, `last_received_at`, and `has_recent_signal` to site summary output when present.
+*   **Events section expanded with full event details**: Site events now display `accepted_events`, `unique_paths`, `by_event_name` distribution, and top lists for sources, campaigns, and referrers.
+*   **Health section displays complete observability metrics**: Added `included_events`, `excluded_test_mode`, `excluded_non_production_host`, `cloudflare_traffic_enabled`, and `production_only_default` to site health observability output.
+*   **Traffic section includes cloudflare_traffic_enabled state**: Traffic payload section now displays Cloudflare traffic enablement status.
+*   **Site identity section now renders when present**: Optional site `identity` block is now parsed and formatted with demographic and returning-user attribution data.
+
+### Added
+
+*   **Comprehensive test coverage for expanded site payload**: Added 7 new contract tests verifying all expanded site report fields are correctly parsed, normalized (with alias support), and displayed in deterministic output.
+*   **Event detail normalization helpers**: Added `normalizeSiteReportEvents()` with support for `by_event_name` maps and event top-list arrays.
+*   **New type definitions**: Added `SiteReportEventTopItem`, `SiteReportEventsByName`, and `SiteReportIdentity` types to support expanded payload shapes.
+*   **Event list formatting utilities**: Added `formatSiteEventsTopList()` and `formatSiteEventsByName()` to render event detail sections with proper markdown formatting.
+
+### Changed
+
+*   **Site report message structure enhanced**: `/report site:<site_key>` output now includes separate `Summary`, `Traffic`, `Events`, and `Observability` sections with all available Lighthouse fields. Optional `Identity` section renders when present.
+*   **Field formatting consistency applied across sections**: All sections use consistent null-to-unavailable rendering, no boolean coercion, and preserve numeric zero values as zero (never dropping them).
+
 ## [0.8.2] — 2026-04-08
 
 ### Fixed

@@ -2,7 +2,7 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.8.1 — Operator-first /report surface)
+## Current Mission (v0.8.2 — /report field-mapping regression fix)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
 
@@ -17,6 +17,13 @@ Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixe
 Typed payload handling is explicit for all four response families. Nulls are preserved until formatting and rendered as unavailable, never silently coerced to zero. Known Lighthouse 400 payloads (`invalid_view`, `missing_site_key`, `invalid_site_key`) map to deterministic operator-facing errors. Report handling remains deterministic-only and non-model-driven.
 
 `accepted_signal_7d` is treated as numeric count telemetry in fleet/site/source-health payload families. Boolean coercion is not applied. Output avoids low-value noise such as unavailable signal-state fields in operator-facing sections.
+
+To prevent upstream naming drift from masking available telemetry, Smith now performs alias-aware normalization for key observability fields before formatting:
+- `accepted_signal_7d` or `accepted_events_7d`
+- `last_received_at` or `last_received`
+- `cloudflare_traffic_enabled` or `traffic_enabled`
+
+If Lighthouse provides any of the accepted alias forms above, Smith must surface the value and must not render `unavailable` for that field.
 
 Slash command schema is defined in repository code (`src/commands/*.ts`) and registered to Discord from `scripts/register-commands.ts`. Deployment now performs command registration automatically after successful Worker deploy, preventing runtime/schema drift.
 

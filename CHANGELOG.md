@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.8.2] — 2026-04-08
+
+### Fixed
+
+*   **Lighthouse field-drop regression in simplified `/report` output**: Restored correct surfacing of observability fields that were being incorrectly rendered as unavailable when Lighthouse provided them.
+*   **Alias-aware telemetry normalization for fleet/site/source-health**: Smith now accepts Lighthouse alias keys and maps them into canonical internal fields:
+  * `accepted_signal_7d` or `accepted_events_7d`
+  * `last_received_at` or `last_received`
+  * `cloudflare_traffic_enabled` or `traffic_enabled`
+*   **All-sites observability totals repaired**: Fleet `Accepted signal 7d total` now computes from available normalized counts instead of falling back to unavailable when alias keys are used upstream.
+*   **Operator visibility restored for available fields**: Fleet/site/source-health formatting now preserves and displays available accepted-signal counts, last-received timestamps, and traffic-enabled flags.
+
+### Added
+
+*   **Regression tests for dropped-field scenarios**: Added coverage proving alias fields are normalized and rendered correctly for fleet/site/source-health and for operator paths `/report` and `/report site:<site_key>`.
+
 ## [0.8.1] — 2026-04-08
 
 ### Changed

@@ -32,6 +32,10 @@ Operator-first deterministic report for all tracked sites or one selected site f
   - Fleet (`view=fleet`): `view`, `generated_at`, `sites[]` with per-site metrics and signal health fields.
   - Site (`view=site`): `view`, `generated_at`, `scope`, `summary`, `traffic`, `events`, `health`.
   - Source health (`view=source_health`): `view`, `generated_at`, `sites[]` focused on telemetry integrity fields.
+  - Field-name compatibility for observability values:
+    - Accepted signal count: `accepted_signal_7d` or `accepted_events_7d`
+    - Last received timestamp: `last_received_at` or `last_received`
+    - Traffic enabled flag: `cloudflare_traffic_enabled` or `traffic_enabled`
 - **Deterministic output expectations**:
   - Fleet/all-sites formatting is sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`.
   - Site formatting follows BUS Core-style operator flow: `Report · <Site Label> · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Read`.

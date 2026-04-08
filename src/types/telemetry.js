@@ -7,6 +7,45 @@ function isNullableNumber(data) {
 function isNullableString(data) {
     return typeof data === 'string' || data === null;
 }
+function getNullableNumberFromAliases(data, primaryKey, aliasKeys = []) {
+    const keys = [primaryKey, ...aliasKeys];
+    for (const key of keys) {
+        if (!(key in data)) {
+            continue;
+        }
+        const value = data[key];
+        if (isNullableNumber(value)) {
+            return value;
+        }
+    }
+    return undefined;
+}
+function getNullableStringFromAliases(data, primaryKey, aliasKeys = []) {
+    const keys = [primaryKey, ...aliasKeys];
+    for (const key of keys) {
+        if (!(key in data)) {
+            continue;
+        }
+        const value = data[key];
+        if (isNullableString(value)) {
+            return value;
+        }
+    }
+    return undefined;
+}
+function getNullableBooleanFromAliases(data, primaryKey, aliasKeys = []) {
+    const keys = [primaryKey, ...aliasKeys];
+    for (const key of keys) {
+        if (!(key in data)) {
+            continue;
+        }
+        const value = data[key];
+        if (typeof value === 'boolean' || value === null) {
+            return value;
+        }
+    }
+    return undefined;
+}
 function isCoreReportWindow(data) {
     if (!isRecord(data)) {
         return false;
@@ -190,40 +229,50 @@ function normalizeFleetSite(data) {
     if (!isRecord(data) || typeof data.site_key !== 'string') {
         return null;
     }
+    const acceptedSignal7d = getNullableNumberFromAliases(data, 'accepted_signal_7d', [
+        'accepted_events_7d',
+    ]);
+    const cloudflareTrafficEnabled = getNullableBooleanFromAliases(data, 'cloudflare_traffic_enabled', [
+        'traffic_enabled',
+    ]);
+    const lastReceivedAt = getNullableStringFromAliases(data, 'last_received_at', ['last_received']);
     return {
         site_key: data.site_key,
         label: isNullableString(data.label) ? data.label : undefined,
         backend_source: isNullableString(data.backend_source) ? data.backend_source : undefined,
-        cloudflare_traffic_enabled: typeof data.cloudflare_traffic_enabled === 'boolean' || data.cloudflare_traffic_enabled === null
-            ? data.cloudflare_traffic_enabled
-            : undefined,
+        cloudflare_traffic_enabled: cloudflareTrafficEnabled,
         pageviews_7d: isNullableNumber(data.pageviews_7d) ? data.pageviews_7d : undefined,
         requests_7d: isNullableNumber(data.requests_7d) ? data.requests_7d : undefined,
         visits_7d: isNullableNumber(data.visits_7d) ? data.visits_7d : undefined,
-        accepted_signal_7d: isNullableNumber(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+        accepted_signal_7d: acceptedSignal7d,
         has_recent_signal: typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
             ? data.has_recent_signal
             : undefined,
-        last_received_at: isNullableString(data.last_received_at) ? data.last_received_at : undefined,
+        last_received_at: lastReceivedAt,
     };
 }
 function normalizeSourceHealthSite(data) {
     if (!isRecord(data) || typeof data.site_key !== 'string') {
         return null;
     }
+    const acceptedSignal7d = getNullableNumberFromAliases(data, 'accepted_signal_7d', [
+        'accepted_events_7d',
+    ]);
+    const cloudflareTrafficEnabled = getNullableBooleanFromAliases(data, 'cloudflare_traffic_enabled', [
+        'traffic_enabled',
+    ]);
+    const lastReceivedAt = getNullableStringFromAliases(data, 'last_received_at', ['last_received']);
     return {
         site_key: data.site_key,
         label: isNullableString(data.label) ? data.label : undefined,
-        accepted_signal_7d: isNullableNumber(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+        accepted_signal_7d: acceptedSignal7d,
         has_recent_signal: typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
             ? data.has_recent_signal
             : undefined,
-        last_received_at: isNullableString(data.last_received_at) ? data.last_received_at : undefined,
+        last_received_at: lastReceivedAt,
         dropped_invalid: isNullableNumber(data.dropped_invalid) ? data.dropped_invalid : undefined,
         dropped_rate_limited: isNullableNumber(data.dropped_rate_limited) ? data.dropped_rate_limited : undefined,
-        cloudflare_traffic_enabled: typeof data.cloudflare_traffic_enabled === 'boolean' || data.cloudflare_traffic_enabled === null
-            ? data.cloudflare_traffic_enabled
-            : undefined,
+        cloudflare_traffic_enabled: cloudflareTrafficEnabled,
     };
 }
 function normalizeSiteReportScope(data) {
@@ -233,13 +282,14 @@ function normalizeSiteReportScope(data) {
     if (!isRecord(data)) {
         return null;
     }
+    const cloudflareTrafficEnabled = getNullableBooleanFromAliases(data, 'cloudflare_traffic_enabled', [
+        'traffic_enabled',
+    ]);
     return {
         site_key: isNullableString(data.site_key) ? data.site_key : undefined,
         label: isNullableString(data.label) ? data.label : undefined,
         backend_source: isNullableString(data.backend_source) ? data.backend_source : undefined,
-        cloudflare_traffic_enabled: typeof data.cloudflare_traffic_enabled === 'boolean' || data.cloudflare_traffic_enabled === null
-            ? data.cloudflare_traffic_enabled
-            : undefined,
+        cloudflare_traffic_enabled: cloudflareTrafficEnabled,
     };
 }
 function normalizeSiteReportSummary(data) {
@@ -303,12 +353,16 @@ function normalizeSiteReportEvents(data) {
     if (!isRecord(data)) {
         return null;
     }
+    const acceptedSignal7d = getNullableNumberFromAliases(data, 'accepted_signal_7d', [
+        'accepted_events_7d',
+    ]);
+    const lastReceivedAt = getNullableStringFromAliases(data, 'last_received_at', ['last_received']);
     return {
-        accepted_signal_7d: isNullableNumber(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+        accepted_signal_7d: acceptedSignal7d,
         has_recent_signal: typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
             ? data.has_recent_signal
             : undefined,
-        last_received_at: isNullableString(data.last_received_at) ? data.last_received_at : undefined,
+        last_received_at: lastReceivedAt,
     };
 }
 function normalizeSiteReportHealth(data) {

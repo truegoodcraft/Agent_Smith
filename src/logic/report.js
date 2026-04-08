@@ -236,6 +236,8 @@ function formatFleetSiteLine(site) {
     const summaryLines = [
         `**${label}**`,
         `- Key: ${site.site_key}`,
+        `- Backend source: ${formatNullableValue(site.backend_source)}`,
+        `- Cloudflare traffic enabled: ${formatNullableValue(site.cloudflare_traffic_enabled)}`,
         `- Traffic 7d: ${trafficBits}`,
         `- Accepted signal 7d: ${formatNullableValue(site.accepted_signal_7d)}`,
         `- Last signal received: ${formatNullableValue(site.last_received_at)}`,
@@ -253,6 +255,7 @@ function formatSourceHealthSiteLine(site) {
         `  last_received=${formatNullableValue(site.last_received_at)}`,
         `  dropped_invalid=${formatNullableValue(site.dropped_invalid)}`,
         `  dropped_rate_limited=${formatNullableValue(site.dropped_rate_limited)}`,
+        `  traffic_enabled=${formatNullableValue(site.cloudflare_traffic_enabled)}`,
     ];
     if (typeof site.has_recent_signal === 'boolean') {
         lines.push(`  has_recent_signal=${site.has_recent_signal}`);

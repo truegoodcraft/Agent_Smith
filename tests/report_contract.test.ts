@@ -65,6 +65,35 @@ test('parses fleet response payload', () => {
   assert.equal(parsed.sites[0].accepted_signal_7d, 7);
 });
 
+test('parses fleet alias fields without dropping values', () => {
+  const payload = {
+    view: 'fleet',
+    generated_at: '2026-04-08T00:00:00Z',
+    sites: [
+      {
+        site_key: 'buscore',
+        label: 'BUS Core',
+        backend_source: 'lighthouse',
+        traffic_enabled: true,
+        accepted_events_7d: 49,
+        last_received: '2026-04-08T19:55:17.273Z',
+      },
+    ],
+  };
+
+  const parsed = normalizeFleetLighthouseReport(payload);
+  assert.ok(parsed);
+  assert.equal(parsed.sites[0].cloudflare_traffic_enabled, true);
+  assert.equal(parsed.sites[0].accepted_signal_7d, 49);
+  assert.equal(parsed.sites[0].last_received_at, '2026-04-08T19:55:17.273Z');
+
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /Cloudflare traffic enabled: true/);
+  assert.match(output, /Accepted signal 7d: 49/);
+  assert.match(output, /Last signal received: 2026-04-08T19:55:17.273Z/);
+  assert.match(output, /Accepted signal 7d total: 49/);
+});
+
 test('parses site response payload', () => {
   const payload = {
     view: 'site',
@@ -98,6 +127,45 @@ test('parses site response payload', () => {
   assert.equal(parsed.events?.accepted_signal_7d, 3);
 });
 
+test('parses site alias fields without dropping values', () => {
+  const payload = {
+    view: 'site',
+    generated_at: '2026-04-08T00:00:00Z',
+    scope: {
+      site_key: 'star_map_generator',
+      label: 'Star Map Generator',
+      backend_source: 'lighthouse',
+      traffic_enabled: true,
+    },
+    summary: {
+      pageviews_7d: 10,
+      requests_7d: 11,
+      visits_7d: 12,
+    },
+    traffic: null,
+    events: {
+      accepted_events_7d: 3,
+      has_recent_signal: true,
+      last_received: '2026-04-08T20:05:07.704Z',
+    },
+    health: {
+      dropped_invalid: 0,
+      dropped_rate_limited: 0,
+    },
+  };
+
+  const parsed = normalizeSiteLighthouseReport(payload);
+  assert.ok(parsed);
+  assert.equal(parsed.scope?.cloudflare_traffic_enabled, true);
+  assert.equal(parsed.events?.accepted_signal_7d, 3);
+  assert.equal(parsed.events?.last_received_at, '2026-04-08T20:05:07.704Z');
+
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /Cloudflare traffic enabled: true/);
+  assert.match(output, /Accepted signal 7d: 3/);
+  assert.match(output, /Last signal received: 2026-04-08T20:05:07.704Z/);
+});
+
 test('parses source health response payload', () => {
   const payload = {
     view: 'source_health',
@@ -120,6 +188,36 @@ test('parses source health response payload', () => {
   assert.ok(parsed);
   assert.equal(parsed.view, 'source_health');
   assert.equal(parsed.sites[0].accepted_signal_7d, 5);
+});
+
+test('parses source health alias fields without dropping values', () => {
+  const payload = {
+    view: 'source_health',
+    generated_at: '2026-04-08T00:00:00Z',
+    sites: [
+      {
+        site_key: 'star_map_generator',
+        label: 'Star Map Generator',
+        accepted_events_7d: 3,
+        has_recent_signal: true,
+        last_received: '2026-04-08T20:05:07.704Z',
+        dropped_invalid: 0,
+        dropped_rate_limited: 0,
+        traffic_enabled: false,
+      },
+    ],
+  };
+
+  const parsed = normalizeSourceHealthLighthouseReport(payload);
+  assert.ok(parsed);
+  assert.equal(parsed.sites[0].accepted_signal_7d, 3);
+  assert.equal(parsed.sites[0].last_received_at, '2026-04-08T20:05:07.704Z');
+  assert.equal(parsed.sites[0].cloudflare_traffic_enabled, false);
+
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /accepted_signal_7d=3/);
+  assert.match(output, /last_received=2026-04-08T20:05:07.704Z/);
+  assert.match(output, /traffic_enabled=false/);
 });
 
 test('accepted_signal_7d rejects boolean and sanitizes to unavailable', () => {
@@ -310,6 +408,79 @@ test('bare /report defaults to all-sites fleet operator report', async () => {
       assert.match(String(content), /\*\*Report · OK · 7d\*\*/);
       assert.match(String(content), /\*\*Sites Summary\*\*/);
       assert.match(requestedUrl, /view=fleet/);
+    },
+  );
+});
+
+test('bare /report preserves alias observability fields from fleet output', async () => {
+  await withMockFetch(
+    (async () =>
+      new Response(JSON.stringify({
+        view: 'fleet',
+        generated_at: null,
+        sites: [
+          {
+            site_key: 'buscore',
+            label: 'BUS Core',
+            backend_source: 'lighthouse',
+            accepted_events_7d: 49,
+            last_received: '2026-04-08T19:55:17.273Z',
+            traffic_enabled: true,
+          },
+          {
+            site_key: 'star_map_generator',
+            label: 'Star Map Generator',
+            backend_source: 'lighthouse',
+            accepted_events_7d: 3,
+            last_received: '2026-04-08T20:05:07.704Z',
+            traffic_enabled: false,
+          },
+        ],
+      })) as Response) as typeof globalThis.fetch,
+    async () => {
+      const payload = await invokeReport();
+      const content = payload.data && 'content' in payload.data ? payload.data.content : '';
+
+      assert.match(String(content), /Accepted signal 7d total: 52/);
+      assert.match(String(content), /Accepted signal 7d: 49/);
+      assert.match(String(content), /Last signal received: 2026-04-08T19:55:17.273Z/);
+      assert.match(String(content), /Cloudflare traffic enabled: true/);
+      assert.match(String(content), /Accepted signal 7d: 3/);
+      assert.match(String(content), /Last signal received: 2026-04-08T20:05:07.704Z/);
+    },
+  );
+});
+
+test('report site:buscore preserves alias observability fields from site output', async () => {
+  await withMockFetch(
+    (async () =>
+      new Response(JSON.stringify({
+        view: 'site',
+        generated_at: null,
+        scope: {
+          site_key: 'buscore',
+          label: 'BUS Core',
+          backend_source: 'lighthouse',
+          traffic_enabled: true,
+        },
+        summary: { requests_7d: 22, visits_7d: 21, pageviews_7d: 20 },
+        traffic: null,
+        events: {
+          accepted_events_7d: 49,
+          has_recent_signal: true,
+          last_received: '2026-04-08T19:55:17.273Z',
+        },
+        health: { dropped_invalid: 0, dropped_rate_limited: 0 },
+      })) as Response) as typeof globalThis.fetch,
+    async () => {
+      const payload = await invokeReport([{ name: 'site', value: 'buscore' }]);
+      const content = payload.data && 'content' in payload.data ? payload.data.content : '';
+
+      assert.match(String(content), /Cloudflare traffic enabled: true/);
+      assert.match(String(content), /Accepted signal 7d: 49/);
+      assert.match(String(content), /Last signal received: 2026-04-08T19:55:17.273Z/);
+      assert.doesNotMatch(String(content), /Accepted signal 7d: unavailable/);
+      assert.doesNotMatch(String(content), /Last signal received: unavailable/);
     },
   );
 });

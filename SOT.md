@@ -2,11 +2,19 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.6.4 — Identity telemetry interpretation update)
+## Current Mission (v0.7.0 — Multi-view Lighthouse report contract support)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
 
-`/report` consumes Lighthouse `/report` as the only source of truth. It uses explicit normalization before formatting. Required core is only `today.update_checks`, `today.downloads`, and `today.errors`. Optional sections (`last_7_days`, `yesterday`, `month_to_date`, `traffic`, `human_traffic`, `identity`, `trends`) are sanitized: valid sections are retained; invalid/malformed sections are set to `undefined`. Unknown top-level keys are ignored. Formatter and report selection consume only this normalized object, preserving deterministic output shape (`Summary`, `Today`, `Traffic`, optional `Human Traffic` + `Observability`, optional `Identity`, and `Read`).
+`/report` consumes Lighthouse `/report` as the only source of truth. Smith is read-only and does not compose Lighthouse-side telemetry locally.
+
+`LIGHTHOUSE_REPORT_URL` is treated as a single base endpoint. Smith appends query parameters at request time for supported views:
+- Legacy: `GET /report` (bare `/report` and `view=legacy`)
+- Fleet: `GET /report?view=fleet`
+- Site: `GET /report?view=site&site_key=<site_key>`
+- Source health: `GET /report?view=source_health`
+
+Typed payload handling is explicit for all four response families. Nulls are preserved until formatting and rendered as unavailable, never silently coerced to zero. Known Lighthouse 400 payloads (`invalid_view`, `missing_site_key`, `invalid_site_key`) map to deterministic operator-facing errors. Report handling remains deterministic-only and non-model-driven.
 
 **[v0.6.4 Identity Support]** `/report` now accepts and interprets an optional `identity` block (anonymous new users, returning users, sessions, return rate, and top returning-user sources). Identity is additive and does not replace core counters, traffic, human traffic, or observability signals. Interpretation language is conservative by design: no retention/channel-fit/product-market-fit claims from weak counts; tiny values are framed as early signals only.
 
@@ -47,7 +55,7 @@ This is a full rewrite path, not a preservation path for the previous Python imp
 | Command    | Status   | Backend                  | Description                      |
 | :--------- | :------- | :----------------------- | :------------------------------- |
 | `/health`  | Live     | None (static)            | Confirms Worker + DO operational |
-| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Compact telemetry report with optional traffic/human/identity sections |
+| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Deterministic Lighthouse report consumer (`legacy`, `fleet`, `site`, `source_health`) |
 
 See `CONTRACTS.md` for detailed command contracts.
 

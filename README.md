@@ -2,16 +2,28 @@
 
 Agent Smith is a deterministic, personal-use Discord bot that watches fixed, read-only backend telemetry. Built on Cloudflare Workers + Durable Objects with Discord HTTP interactions. No AI, no models, no persistence.
 
+Lighthouse is the reporting authority. Smith is a read-only consumer and operator interface for Lighthouse report views.
+
 ## Commands
 
 | Command    | Description                                    |
 | :--------- | :--------------------------------------------- |
 | `/health`  | Confirms Worker + Durable Object are running   |
-| `/report`  | Compact Lighthouse report with optional traffic |
+| `/report`  | Lighthouse report consumer: `legacy`, `fleet`, `site`, `source_health` |
 
 `/traffic` and `/errors` are planned but not yet implemented.
 
-`/report` renders deterministic `Summary`, `Today`, `Traffic`, and `Read` sections. If Lighthouse omits `traffic`, Smith still succeeds and states that traffic data is not present in that report.
+`/report` supports these operator paths:
+
+- `/report` (legacy-compatible)
+- `/report view:legacy`
+- `/report view:fleet`
+- `/report view:site site:buscore`
+- `/report view:site site:tgc_site`
+- `/report view:site site:star_map_generator`
+- `/report view:source_health`
+
+Legacy output remains deterministic `Summary`, `Today`, `Traffic`, and `Read` sections (plus optional human/identity sections). Fleet, site, and source-health outputs are deterministic and view-specific. Nulls are rendered as unavailable and are not rewritten to zero.
 
 See [CONTRACTS.md](CONTRACTS.md) for exact output shapes.
 
@@ -92,7 +104,36 @@ Requires `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in environment.
      -H "Content-Type: application/json" \
      -d '[
        {"name":"health","description":"Check Smith operational status","type":1},
-       {"name":"report","description":"Fetch telemetry report","type":1}
+       {
+         "name":"report",
+         "description":"Fetch Lighthouse report views",
+         "type":1,
+         "options":[
+           {
+             "name":"view",
+             "description":"Report view",
+             "type":3,
+             "required":false,
+             "choices":[
+               {"name":"legacy","value":"legacy"},
+               {"name":"fleet","value":"fleet"},
+               {"name":"site","value":"site"},
+               {"name":"source_health","value":"source_health"}
+             ]
+           },
+           {
+             "name":"site",
+             "description":"Site key for site view",
+             "type":3,
+             "required":false,
+             "choices":[
+               {"name":"buscore","value":"buscore"},
+               {"name":"tgc_site","value":"tgc_site"},
+               {"name":"star_map_generator","value":"star_map_generator"}
+             ]
+           }
+         ]
+       }
      ]'
    ```
 5. Under **General Information** → **Interactions Endpoint URL**, set it to your Worker URL (e.g., `https://agent-smith.your-account.workers.dev`)

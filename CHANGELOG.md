@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.7.0] — 2026-04-08
+
+### Added
+
+*   **Multi-view Lighthouse `/report` support**: Added explicit support for legacy (`/report`), `view=fleet`, `view=site&site_key=<site_key>`, and `view=source_health` using a single `LIGHTHOUSE_REPORT_URL` base endpoint with query parameters appended in code.
+*   **Typed payload handling by view family**: Added explicit payload parsing/normalization for legacy, fleet, site, and source-health views, plus known Lighthouse 400 payloads (`invalid_view`, `missing_site_key`, `invalid_site_key`).
+*   **View-aware deterministic formatting**: Added fleet, site, and source-health deterministic formatters while preserving legacy report formatting behavior.
+*   **Contract tests for Lighthouse consumption**: Added TypeScript tests covering fleet/site/source-health parsing, known 400 error mapping, null/unavailable rendering semantics, legacy compatibility, and non-model report path enforcement.
+
+### Changed
+
+*   **`/report` command option routing**: `/report` now accepts `view` (`legacy`, `fleet`, `site`, `source_health`) and `site` options with deterministic routing and operator-facing errors for missing/invalid site and invalid view.
+*   **Null preservation behavior**: Report parsing and rendering now preserve nullable values through formatting and render unavailable values honestly instead of coercing to zero.
+*   **No local telemetry composition**: Smith now consumes Lighthouse view payloads directly without local reconstruction of Lighthouse-side composition.
+*   **Governance docs aligned**: Updated `SOT.md`, `CONTRACTS.md`, and `README.md` for multi-view `/report` behavior and Lighthouse authority.
+
 ## [0.6.4] — 2026-03-26
 
 ### Added

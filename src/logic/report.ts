@@ -1,19 +1,19 @@
-// src/logic/report.ts
-
 import {
-  LighthouseReport,
+  FleetLighthouseReport,
+  FleetReportSite,
+  LegacyLighthouseReport,
+  LighthouseReportPayload,
   ReportHumanTraffic,
   ReportIdentity,
   ReportTraffic,
   ReportWindow,
-  SelectedReport,
+  SelectedLegacyReport,
+  SiteLighthouseReport,
+  SourceHealthLighthouseReport,
+  SourceHealthSite,
 } from '../types/telemetry';
 
-/**
- * Selects the canonical report window based on fixed rules.
- * Prefers `last_7_days` if present, otherwise falls back to `today`.
- */
-export function selectReportWindow(payload: LighthouseReport): SelectedReport {
+export function selectReportWindow(payload: LegacyLighthouseReport): SelectedLegacyReport {
   if (payload.last_7_days) {
     return {
       windowLabel: '7d',
@@ -25,6 +25,7 @@ export function selectReportWindow(payload: LighthouseReport): SelectedReport {
       identity: payload.identity,
     };
   }
+
   return {
     windowLabel: 'today',
     selected: payload.today,
@@ -36,9 +37,6 @@ export function selectReportWindow(payload: LighthouseReport): SelectedReport {
   };
 }
 
-/**
- * Generates deterministic read line from selected-window counters.
- */
 export function getCoreRead(counters: ReportWindow): string {
   if (counters.errors > 0) {
     return 'Recent error activity present; investigation recommended.';
@@ -49,15 +47,6 @@ export function getCoreRead(counters: ReportWindow): string {
   }
 
   return 'No core activity recorded in the selected window.';
-}
-
-function formatCounters(label: string, counters: ReportWindow): string {
-  return [
-    `**${label}**`,
-    `- Update checks: ${counters.update_checks}`,
-    `- Downloads: ${counters.downloads}`,
-    `- Errors: ${counters.errors}`,
-  ].join('\n');
 }
 
 export function getTrafficRead(traffic?: ReportTraffic): string {
@@ -85,8 +74,17 @@ export function getTrafficRead(traffic?: ReportTraffic): string {
   return readParts.join(' ');
 }
 
-function formatNullableValue(value: number | string | null): string {
-  if (value === null) {
+function formatCounters(label: string, counters: ReportWindow): string {
+  return [
+    `**${label}**`,
+    `- Update checks: ${counters.update_checks}`,
+    `- Downloads: ${counters.downloads}`,
+    `- Errors: ${counters.errors}`,
+  ].join('\n');
+}
+
+function formatNullableValue(value: number | string | boolean | null | undefined): string {
+  if (value === undefined || value === null) {
     return 'unavailable';
   }
 
@@ -129,10 +127,7 @@ function formatTrafficSection(traffic?: ReportTraffic): string {
   ].join('\n');
 }
 
-function formatTopList(
-  heading: string,
-  entries: string[],
-): string {
+function formatTopList(heading: string, entries: string[]): string {
   if (entries.length === 0) {
     return '';
   }
@@ -145,12 +140,14 @@ function formatHumanTrafficSection(humanTraffic: ReportHumanTraffic): string {
     'Top Paths:',
     humanTraffic.last_7_days.top_paths.map((entry) => `${entry.path} (${entry.pageviews})`),
   );
+
   const topReferrersBlock = formatTopList(
     'Top Referrers:',
     humanTraffic.last_7_days.top_referrers.map(
       (entry) => `${entry.referrer_domain} (${entry.pageviews})`,
     ),
   );
+
   const topSourcesBlock = formatTopList(
     'Top Sources:',
     humanTraffic.last_7_days.top_sources.map((entry) => `${entry.source} (${entry.pageviews})`),
@@ -175,13 +172,17 @@ function formatHumanObservabilitySection(humanTraffic: ReportHumanTraffic): stri
     `- Accepted: ${humanTraffic.observability.accepted}`,
     `- Dropped (rate limited): ${humanTraffic.observability.dropped_rate_limited}`,
     `- Dropped (invalid): ${humanTraffic.observability.dropped_invalid}`,
+    `- Last received: ${formatNullableValue(humanTraffic.observability.last_received_at)}`,
   ].join('\n');
 }
 
 function formatIdentitySection(identity: ReportIdentity): string {
-  const topReturningSources = identity.top_sources_by_returning_users.length > 0
-    ? identity.top_sources_by_returning_users.map((entry) => `- ${entry.source} (${entry.users})`).join('\n')
-    : '- none';
+  const topReturningSources =
+    identity.top_sources_by_returning_users.length > 0
+      ? identity.top_sources_by_returning_users
+          .map((entry) => `- ${entry.source} (${entry.users})`)
+          .join('\n')
+      : '- none';
 
   return [
     '**Identity**',
@@ -202,13 +203,15 @@ function isTinyIdentitySignal(identity: ReportIdentity): boolean {
   const sevenDayReturning = identity.last_7_days?.returning_users;
   const todayNewUsers = identity.today?.new_users;
   const sevenDayNewUsers = identity.last_7_days?.new_users;
-  const knownValues = [todayReturning, sevenDayReturning, todayNewUsers, sevenDayNewUsers]
-    .filter((value): value is number => typeof value === 'number');
+
+  const knownValues = [todayReturning, sevenDayReturning, todayNewUsers, sevenDayNewUsers].filter(
+    (value): value is number => typeof value === 'number',
+  );
 
   return knownValues.length > 0 && Math.max(...knownValues) <= 2;
 }
 
-export function getIdentityReadLines(identity?: ReportIdentity): string[] {
+function getIdentityReadLines(identity?: ReportIdentity): string[] {
   if (!identity) {
     return [];
   }
@@ -220,22 +223,31 @@ export function getIdentityReadLines(identity?: ReportIdentity): string[] {
   const sevenDayNewUsers = identity.last_7_days?.new_users;
   const todaySessions = identity.today?.sessions;
   const sevenDaySessions = identity.last_7_days?.sessions;
+
   const returningSourceLeader = identity.top_sources_by_returning_users
     .filter((entry) => entry.users > 0)
     .sort((a, b) => b.users - a.users)[0];
-  const hasKnownReturning = typeof todayReturning === 'number' || typeof sevenDayReturning === 'number';
-  const hasReturningUsersFromCounters = (typeof todayReturning === 'number' && todayReturning > 0)
-    || (typeof sevenDayReturning === 'number' && sevenDayReturning > 0);
+
+  const hasKnownReturning =
+    typeof todayReturning === 'number' || typeof sevenDayReturning === 'number';
+
+  const hasReturningUsersFromCounters =
+    (typeof todayReturning === 'number' && todayReturning > 0) ||
+    (typeof sevenDayReturning === 'number' && sevenDayReturning > 0);
+
   const hasReturningUsers = hasReturningUsersFromCounters || Boolean(returningSourceLeader);
+
   const hasAcquisitionOrActivity =
-    (typeof todayNewUsers === 'number' && todayNewUsers > 0)
-    || (typeof sevenDayNewUsers === 'number' && sevenDayNewUsers > 0)
-    || (typeof todaySessions === 'number' && todaySessions > 0)
-    || (typeof sevenDaySessions === 'number' && sevenDaySessions > 0);
+    (typeof todayNewUsers === 'number' && todayNewUsers > 0) ||
+    (typeof sevenDayNewUsers === 'number' && sevenDayNewUsers > 0) ||
+    (typeof todaySessions === 'number' && todaySessions > 0) ||
+    (typeof sevenDaySessions === 'number' && sevenDaySessions > 0);
 
   if (hasReturningUsers) {
     if (isTinyIdentitySignal(identity)) {
-      lines.push('A small but real anonymous return signal is present; repeat engagement is visible, though still too early for strong conclusions.');
+      lines.push(
+        'A small but real anonymous return signal is present; repeat engagement is visible, though still too early for strong conclusions.',
+      );
     } else {
       lines.push('Anonymous return activity detected. Returning visitors are present in the 7-day window.');
     }
@@ -253,16 +265,20 @@ export function getIdentityReadLines(identity?: ReportIdentity): string[] {
       : null;
 
   if (
-    typeof sevenDaySessions === 'number'
-    && typeof sevenDayDistinctUsers === 'number'
-    && sevenDayDistinctUsers > 0
-    && sevenDaySessions > sevenDayDistinctUsers
+    typeof sevenDaySessions === 'number' &&
+    typeof sevenDayDistinctUsers === 'number' &&
+    sevenDayDistinctUsers > 0 &&
+    sevenDaySessions > sevenDayDistinctUsers
   ) {
-    lines.push('Session volume exceeds distinct-user counts, suggesting revisit depth or multi-session behavior.');
+    lines.push(
+      'Session volume exceeds distinct-user counts, suggesting revisit depth or multi-session behavior.',
+    );
   }
 
   if (returningSourceLeader) {
-    lines.push(`${returningSourceLeader.source} appears in returning-user attribution, making it more meaningful than raw click volume alone.`);
+    lines.push(
+      `${returningSourceLeader.source} appears in returning-user attribution, making it more meaningful than raw click volume alone.`,
+    );
   }
 
   if (lines.length === 0) {
@@ -272,7 +288,7 @@ export function getIdentityReadLines(identity?: ReportIdentity): string[] {
   return lines.slice(0, 3);
 }
 
-export function getHumanTrafficRead(
+function getHumanTrafficRead(
   humanTraffic: ReportHumanTraffic | undefined,
   selected: ReportWindow,
   windowLabel: '7d' | 'today',
@@ -281,15 +297,16 @@ export function getHumanTrafficRead(
     return null;
   }
 
-  const pageviewsInSelectedWindow = windowLabel === '7d'
-    ? humanTraffic.last_7_days.pageviews
-    : humanTraffic.today.pageviews;
+  const pageviewsInSelectedWindow =
+    windowLabel === '7d' ? humanTraffic.last_7_days.pageviews : humanTraffic.today.pageviews;
 
-  const humanSignalLine = humanTraffic.today.pageviews > 0
-    ? `Human activity present with ${humanTraffic.today.pageviews} pageviews.`
-    : 'Human traffic absent or very low.';
+  const humanSignalLine =
+    humanTraffic.today.pageviews > 0
+      ? `Human activity present with ${humanTraffic.today.pageviews} pageviews.`
+      : 'Human traffic absent or very low.';
 
   let engagementLine = '';
+
   if (selected.downloads > 0 && pageviewsInSelectedWindow === 0) {
     engagementLine = 'Downloads present without pageviews (possible direct/binary access).';
   } else if (pageviewsInSelectedWindow > 0 && selected.downloads === 0) {
@@ -301,28 +318,51 @@ export function getHumanTrafficRead(
   return [humanSignalLine, engagementLine].filter(Boolean).join(' ');
 }
 
-/**
- * Formats the final report string to be sent to Discord.
- */
-export function formatReport(report: SelectedReport): string {
-  try {
-    const statusLine = report.windowLabel === '7d'
-      ? 'Report · OK · 7d'
-      : 'Report · OK · today';
+function formatFleetSiteLine(site: FleetReportSite): string {
+  const label = site.label || 'unlabeled';
+  return [
+    `- ${label} (${site.site_key})`,
+    `source=${formatNullableValue(site.backend_source)}`,
+    `recent_signal=${formatNullableValue(site.has_recent_signal)}`,
+    `last_received=${formatNullableValue(site.last_received_at)}`,
+    `accepted_7d=${formatNullableValue(site.accepted_signal_7d)}`,
+    `pageviews_7d=${formatNullableValue(site.pageviews_7d)}`,
+    `requests_7d=${formatNullableValue(site.requests_7d)}`,
+    `visits_7d=${formatNullableValue(site.visits_7d)}`,
+  ].join(' | ');
+}
+
+function formatSourceHealthSiteLine(site: SourceHealthSite): string {
+  const label = site.label || 'unlabeled';
+  return [
+    `- ${label} (${site.site_key})`,
+    `accepted_signal_7d=${formatNullableValue(site.accepted_signal_7d)}`,
+    `has_recent_signal=${formatNullableValue(site.has_recent_signal)}`,
+    `last_received=${formatNullableValue(site.last_received_at)}`,
+    `dropped_invalid=${formatNullableValue(site.dropped_invalid)}`,
+    `dropped_rate_limited=${formatNullableValue(site.dropped_rate_limited)}`,
+    `traffic_enabled=${formatNullableValue(site.cloudflare_traffic_enabled)}`,
+  ].join(' | ');
+}
+
+function formatLegacyReport(report: SelectedLegacyReport): string {
+  const statusLine = report.windowLabel === '7d' ? 'Report · OK · 7d' : 'Report · OK · today';
 
   const selectedBlock = formatCounters('Summary', report.selected);
   const todayBlock = formatCounters('Today', report.today);
   const trafficBlock = formatTrafficSection(report.traffic);
+
   const humanTrafficBlock = report.human_traffic
     ? formatHumanTrafficSection(report.human_traffic)
     : null;
+
   const humanObservabilityBlock = report.human_traffic
     ? formatHumanObservabilitySection(report.human_traffic)
     : null;
-  const identityBlock = report.identity
-    ? formatIdentitySection(report.identity)
-    : null;
+
+  const identityBlock = report.identity ? formatIdentitySection(report.identity) : null;
   const identityReadLines = getIdentityReadLines(report.identity);
+
   const deterministicRead = [
     getCoreRead(report.selected),
     getTrafficRead(report.traffic),
@@ -333,43 +373,99 @@ export function formatReport(report: SelectedReport): string {
     .map((line) => `- ${line}`)
     .join('\n');
 
-  const sections = [
-    `**${statusLine}**`,
-    '',
-    selectedBlock,
-    '',
-    todayBlock,
-    '',
-    trafficBlock,
-  ];
+  const sections = [`**${statusLine}**`, '', selectedBlock, '', todayBlock, '', trafficBlock];
 
   if (humanTrafficBlock && humanObservabilityBlock) {
-    sections.push(
-      '',
-      humanTrafficBlock,
-      '',
-      humanObservabilityBlock,
-    );
+    sections.push('', humanTrafficBlock, '', humanObservabilityBlock);
   }
 
   if (identityBlock) {
-    sections.push(
-      '',
-      identityBlock,
-    );
+    sections.push('', identityBlock);
   }
 
-  sections.push(
+  sections.push('', '**Read**', deterministicRead);
+
+  return sections.join('\n');
+}
+
+function formatFleetReport(report: FleetLighthouseReport): string {
+  const siteLines = report.sites.length > 0
+    ? report.sites.map((site) => formatFleetSiteLine(site)).join('\n')
+    : '- none';
+
+  return [
+    '**Report · Fleet**',
+    `- Generated at: ${formatNullableValue(report.generated_at)}`,
+    `- Sites: ${report.sites.length}`,
     '',
-    '**Read**',
-    deterministicRead,
-  );
+    '**Fleet Overview**',
+    siteLines,
+  ].join('\n');
+}
 
-  const formatted = sections.join('\n');
-  console.log('[REPORT_FORMAT_OK] Report formatted successfully');
-  return formatted;
-  } catch (e) {
-    console.error('[REPORT_FORMAT_FAIL] Exception during formatting', e);
-    throw e;
+function formatSiteSection(
+  title: string,
+  section: object | null | undefined,
+): string {
+  if (!section) {
+    return [`**${title}**`, '- unavailable'].join('\n');
   }
+
+  const lines = Object.entries(section as Record<string, unknown>).map(([key, value]) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return `- ${key}: ${JSON.stringify(value)}`;
+    }
+
+    return `- ${key}: ${formatNullableValue(value as number | string | boolean | null | undefined)}`;
+  });
+
+  return [`**${title}**`, ...lines].join('\n');
+}
+
+function formatSiteReport(report: SiteLighthouseReport): string {
+  return [
+    '**Report · Site**',
+    `- Generated at: ${formatNullableValue(report.generated_at)}`,
+    '',
+    formatSiteSection('Scope', report.scope),
+    '',
+    formatSiteSection('Summary', report.summary),
+    '',
+    formatSiteSection('Traffic', report.traffic),
+    '',
+    formatSiteSection('Events', report.events),
+    '',
+    formatSiteSection('Health', report.health),
+  ].join('\n');
+}
+
+function formatSourceHealthReport(report: SourceHealthLighthouseReport): string {
+  const siteLines = report.sites.length > 0
+    ? report.sites.map((site) => formatSourceHealthSiteLine(site)).join('\n')
+    : '- none';
+
+  return [
+    '**Report · Source Health**',
+    `- Generated at: ${formatNullableValue(report.generated_at)}`,
+    `- Sites: ${report.sites.length}`,
+    '',
+    '**Telemetry Integrity**',
+    siteLines,
+  ].join('\n');
+}
+
+export function formatLighthouseReport(report: LighthouseReportPayload): string {
+  if ('view' in report) {
+    if (report.view === 'fleet') {
+      return formatFleetReport(report);
+    }
+
+    if (report.view === 'site') {
+      return formatSiteReport(report);
+    }
+
+    return formatSourceHealthReport(report);
+  }
+
+  return formatLegacyReport(selectReportWindow(report));
 }

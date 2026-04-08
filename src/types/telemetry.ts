@@ -1,8 +1,17 @@
-// src/types/telemetry.ts
+export type ReportView = 'legacy' | 'fleet' | 'site' | 'source_health';
 
-/**
- * Represents the data for a single reporting window (e.g., "today" or "last_7_days").
- */
+export type SiteKey = 'buscore' | 'tgc_site' | 'star_map_generator';
+
+export interface LighthouseReportRequest {
+  view: ReportView;
+  siteKey?: string;
+}
+
+export interface LighthouseErrorPayload {
+  ok: false;
+  error: 'invalid_view' | 'missing_site_key' | 'invalid_site_key';
+}
+
 export interface ReportWindow {
   update_checks: number;
   downloads: number;
@@ -46,7 +55,7 @@ export interface ReportHumanTopSource {
 
 export interface ReportHumanToday {
   pageviews: number;
-  last_received_at: string;
+  last_received_at: string | null;
 }
 
 export interface ReportHumanLast7Days {
@@ -61,7 +70,7 @@ export interface ReportHumanObservability {
   accepted: number;
   dropped_rate_limited: number;
   dropped_invalid: number;
-  last_received_at: string;
+  last_received_at: string | null;
 }
 
 export interface ReportHumanTraffic {
@@ -94,10 +103,7 @@ export interface ReportIdentity {
   top_sources_by_returning_users: ReportIdentityTopSource[];
 }
 
-/**
- * The expected structure of the JSON payload from the Lighthouse /report endpoint.
- */
-export interface LighthouseReport {
+export interface LegacyLighthouseReport {
   today: ReportWindow;
   yesterday?: ReportWindow;
   last_7_days?: ReportWindow;
@@ -106,10 +112,101 @@ export interface LighthouseReport {
   human_traffic?: ReportHumanTraffic;
   identity?: ReportIdentity;
   trends?: unknown;
-  // Other fields from the API can be added here but are not used by the /report command.
 }
 
-export interface SelectedReport {
+export interface FleetReportSite {
+  site_key: string;
+  label?: string | null;
+  backend_source?: string | null;
+  cloudflare_traffic_enabled?: boolean | null;
+  pageviews_7d?: number | null;
+  requests_7d?: number | null;
+  visits_7d?: number | null;
+  accepted_signal_7d?: number | boolean | null;
+  has_recent_signal?: boolean | null;
+  last_received_at?: string | null;
+}
+
+export interface FleetLighthouseReport {
+  view: 'fleet';
+  generated_at: string | null;
+  sites: FleetReportSite[];
+}
+
+export interface SiteReportScope {
+  site_key?: string | null;
+  label?: string | null;
+  backend_source?: string | null;
+  cloudflare_traffic_enabled?: boolean | null;
+}
+
+export interface SiteReportSummary {
+  pageviews_7d?: number | null;
+  requests_7d?: number | null;
+  visits_7d?: number | null;
+}
+
+export interface SiteReportTraffic {
+  latest_day?: {
+    day?: string | null;
+    visits?: number | null;
+    requests?: number | null;
+    captured_at?: string | null;
+  } | null;
+  last_7_days?: {
+    visits?: number | null;
+    requests?: number | null;
+    avg_daily_visits?: number | null;
+    avg_daily_requests?: number | null;
+    days_with_data?: number | null;
+  } | null;
+}
+
+export interface SiteReportEvents {
+  accepted_signal_7d?: number | boolean | null;
+  has_recent_signal?: boolean | null;
+  last_received_at?: string | null;
+}
+
+export interface SiteReportHealth {
+  dropped_invalid?: number | null;
+  dropped_rate_limited?: number | null;
+}
+
+export interface SiteLighthouseReport {
+  view: 'site';
+  generated_at: string | null;
+  scope: SiteReportScope | null;
+  summary: SiteReportSummary | null;
+  traffic: SiteReportTraffic | null;
+  events: SiteReportEvents | null;
+  health: SiteReportHealth | null;
+}
+
+export interface SourceHealthSite {
+  site_key: string;
+  label?: string | null;
+  accepted_signal_7d?: number | boolean | null;
+  has_recent_signal?: boolean | null;
+  last_received_at?: string | null;
+  dropped_invalid?: number | null;
+  dropped_rate_limited?: number | null;
+  cloudflare_traffic_enabled?: boolean | null;
+}
+
+export interface SourceHealthLighthouseReport {
+  view: 'source_health';
+  generated_at: string | null;
+  sites: SourceHealthSite[];
+}
+
+export type LighthouseReportPayload =
+  | LegacyLighthouseReport
+  | FleetLighthouseReport
+  | SiteLighthouseReport
+  | SourceHealthLighthouseReport;
+
+export interface SelectedLegacyReport {
   windowLabel: 'today' | '7d';
   selected: ReportWindow;
   today: ReportWindow;
@@ -119,71 +216,23 @@ export interface SelectedReport {
   identity?: ReportIdentity;
 }
 
-/**
- * A type guard to validate if an object conforms to the LighthouseReport structure.
- * LENIENT validation: Only requires core fields (today.{update_checks, downloads, errors} and optionally last_7_days with same fields).
- * All other sections are optional and ignored if malformed.
- * Unknown top-level keys are tolerated.
- */
-export function isLighthouseReport(data: any): data is LighthouseReport {
-  if (!data || typeof data !== 'object') {
-    return false;
-  }
-
-  // REQUIRED: today with the three core metric fields
-  const hasToday = 'today' in data && isCoreReportWindow(data.today);
-  if (!hasToday) {
-    console.warn('[REPORT_VALIDATION_WARN] Missing or invalid today section with core fields (update_checks, downloads, errors)');
-    return false;
-  }
-
-  // OPTIONAL: last_7_days, but if present must have the three core metric fields
-  const hasOptionalLast7Days = !('last_7_days' in data) || isCoreReportWindow(data.last_7_days);
-  if (!hasOptionalLast7Days) {
-    console.warn('[REPORT_VALIDATION_WARN] Skipping last_7_days; present but missing core fields (update_checks, downloads, errors)');
-  }
-
-  // OPTIONAL: yesterday - only validate if present
-  if ('yesterday' in data && !isCoreReportWindow(data.yesterday)) {
-    console.warn('[REPORT_VALIDATION_WARN] yesterday present but not a valid ReportWindow; will be skipped');
-  }
-
-  // OPTIONAL: month_to_date - only validate if present
-  if ('month_to_date' in data && !isCoreReportWindow(data.month_to_date)) {
-    console.warn('[REPORT_VALIDATION_WARN] month_to_date present but not a valid ReportWindow; will be skipped');
-  }
-
-  // OPTIONAL: traffic - only validate narrowly if present
-  if ('traffic' in data && !isReportTrafficNarrow(data.traffic)) {
-    console.warn('[REPORT_VALIDATION_WARN] traffic present but does not match expected structure; will be skipped');
-  }
-
-  // OPTIONAL: human_traffic - only validate narrowly if present
-  if ('human_traffic' in data && !isReportHumanTrafficNarrow(data.human_traffic)) {
-    console.warn('[REPORT_VALIDATION_WARN] human_traffic present but does not match expected structure; will be skipped');
-  }
-
-  // OPTIONAL: identity - partial subfields are accepted and normalized.
-  if ('identity' in data && !isReportIdentityNarrow(data.identity)) {
-    console.warn('[REPORT_VALIDATION_WARN] identity present but does not match expected structure; will be skipped');
-  }
-
-  // OPTIONAL: trends - ignored
-  // OPTIONAL: observability - ignored
-  // OPTIONAL: any unknown top-level keys - ignored
-
-  // Success: We have the required today section with core fields, and optional sections don't fail us
-  return hasOptionalLast7Days;
+function isRecord(data: unknown): data is Record<string, unknown> {
+  return Boolean(data) && typeof data === 'object' && !Array.isArray(data);
 }
 
-/**
- * Core metric fields validator (narrow): checks only for update_checks, downloads, errors.
- * Used for required and core-optional sections.
- */
-function isCoreReportWindow(data: any): data is ReportWindow {
-  if (!data || typeof data !== 'object') {
+function isNullableNumber(data: unknown): data is number | null {
+  return typeof data === 'number' || data === null;
+}
+
+function isNullableString(data: unknown): data is string | null {
+  return typeof data === 'string' || data === null;
+}
+
+function isCoreReportWindow(data: unknown): data is ReportWindow {
+  if (!isRecord(data)) {
     return false;
   }
+
   return (
     typeof data.update_checks === 'number' &&
     typeof data.downloads === 'number' &&
@@ -191,165 +240,132 @@ function isCoreReportWindow(data: any): data is ReportWindow {
   );
 }
 
-/**
- * A type guard to validate if an object conforms to the ReportWindow structure.
- * Checks for all three fields: update_checks, downloads, errors.
- * NOTE: See isCoreReportWindow for the lenient version used in validation.
- */
-function isReportWindow(data: any): data is ReportWindow {
-    if (!data || typeof data !== 'object') {
-        return false;
-    }
-    return (
-        typeof data.update_checks === 'number' &&
-        typeof data.downloads === 'number' &&
-        typeof data.errors === 'number'
-    );
-}
-
-/**
- * Narrow validator for the traffic section (optional).
- * Only validates the structure that /report actually uses:
- * latest_day.day, latest_day.captured_at, latest_day.requests, latest_day.visits
- * last_7_days.requests, last_7_days.visits, last_7_days.avg_daily_requests, last_7_days.avg_daily_visits, last_7_days.days_with_data
- * If any of these critical fields are missing or malformed, returns false and traffic will be skipped.
- */
-function isReportTrafficNarrow(data: any): boolean {
-  if (!data || typeof data !== 'object') {
+function isReportTrafficLatestDay(data: unknown): data is ReportTrafficLatestDay {
+  if (!isRecord(data)) {
     return false;
   }
 
-  // Check latest_day section minimally
-  if ('latest_day' in data) {
-    const ld = data.latest_day;
-    if (!ld || typeof ld !== 'object') return false;
-    // latest_day is used in formatting, check it has expected shape
-    if (!('day' in ld && 'visits' in ld && 'requests' in ld && 'captured_at' in ld)) return false;
-  }
-
-  // Check last_7_days section minimally
-  if ('last_7_days' in data) {
-    const l7d = data.last_7_days;
-    if (!l7d || typeof l7d !== 'object') return false;
-    // last_7_days must have the fields /report uses
-    if (!('visits' in l7d && 'requests' in l7d && 'avg_daily_visits' in l7d && 'avg_daily_requests' in l7d && 'days_with_data' in l7d)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-/**
- * Narrow validator for the human_traffic section (optional).
- * Validates only the fields /report formatting consumes.
- */
-function isReportHumanTrafficNarrow(data: any): boolean {
-  if (!data || typeof data !== 'object') {
-    return false;
-  }
-
-  if ('today' in data) {
-    const today = data.today;
-    if (!today || typeof today !== 'object') return false;
-    if (typeof today.pageviews !== 'number') return false;
-    if (typeof today.last_received_at !== 'string') return false;
-  }
-
-  if ('last_7_days' in data) {
-    const l7 = data.last_7_days;
-    if (!l7 || typeof l7 !== 'object') return false;
-    if (typeof l7.pageviews !== 'number') return false;
-    if (typeof l7.days_with_data !== 'number') return false;
-    if (!Array.isArray(l7.top_paths) || !Array.isArray(l7.top_referrers) || !Array.isArray(l7.top_sources)) {
-      return false;
-    }
-  }
-
-  if ('observability' in data) {
-    const o = data.observability;
-    if (!o || typeof o !== 'object') return false;
-    if (typeof o.accepted !== 'number') return false;
-    if (typeof o.dropped_rate_limited !== 'number') return false;
-    if (typeof o.dropped_invalid !== 'number') return false;
-    if (typeof o.last_received_at !== 'string') return false;
-  }
-
-  return true;
-}
-
-/**
- * Narrow validator for optional identity block.
- * Allows partial blocks and defers field-level fallback handling to normalization.
- */
-function isReportIdentityNarrow(data: any): boolean {
-  if (!data || typeof data !== 'object') {
-    return false;
-  }
-
-  const record = data as Record<string, unknown>;
-
-  if ('today' in record && !isReportIdentityWindowNarrow(record.today)) {
-    return false;
-  }
-
-  if ('last_7_days' in record && !isReportIdentityLast7DaysNarrow(record.last_7_days)) {
-    return false;
-  }
-
-  if ('top_sources_by_returning_users' in record && !Array.isArray(record.top_sources_by_returning_users)) {
-    return false;
-  }
-
-  return true;
-}
-
-function isReportIdentityWindowNarrow(data: unknown): boolean {
-  if (!data || typeof data !== 'object') {
-    return false;
-  }
-
-  const record = data as Record<string, unknown>;
   return (
-    (!('new_users' in record) || typeof record.new_users === 'number' || record.new_users === null) &&
-    (!('returning_users' in record) || typeof record.returning_users === 'number' || record.returning_users === null) &&
-    (!('sessions' in record) || typeof record.sessions === 'number' || record.sessions === null)
+    isNullableString(data.day) &&
+    isNullableNumber(data.visits) &&
+    isNullableNumber(data.requests) &&
+    isNullableString(data.captured_at)
   );
 }
 
-function isReportIdentityLast7DaysNarrow(data: unknown): boolean {
-  if (!isReportIdentityWindowNarrow(data)) {
+function isReportTrafficLast7Days(data: unknown): data is ReportTrafficLast7Days {
+  if (!isRecord(data)) {
     return false;
   }
 
-  const record = data as Record<string, unknown>;
-  return !('return_rate' in record) || typeof record.return_rate === 'number' || record.return_rate === null;
+  return (
+    isNullableNumber(data.visits) &&
+    isNullableNumber(data.requests) &&
+    isNullableNumber(data.avg_daily_visits) &&
+    isNullableNumber(data.avg_daily_requests) &&
+    isNullableNumber(data.days_with_data)
+  );
+}
+
+function isReportTraffic(data: unknown): data is ReportTraffic {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  return (
+    isReportTrafficLatestDay(data.latest_day) &&
+    isReportTrafficLast7Days(data.last_7_days)
+  );
+}
+
+function isReportHumanTopPath(data: unknown): data is ReportHumanTopPath {
+  return isRecord(data) && typeof data.path === 'string' && typeof data.pageviews === 'number';
+}
+
+function isReportHumanTopReferrer(data: unknown): data is ReportHumanTopReferrer {
+  return isRecord(data) && typeof data.referrer_domain === 'string' && typeof data.pageviews === 'number';
+}
+
+function isReportHumanTopSource(data: unknown): data is ReportHumanTopSource {
+  return isRecord(data) && typeof data.source === 'string' && typeof data.pageviews === 'number';
+}
+
+function isReportHumanToday(data: unknown): data is ReportHumanToday {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  return typeof data.pageviews === 'number' && isNullableString(data.last_received_at);
+}
+
+function isReportHumanLast7Days(data: unknown): data is ReportHumanLast7Days {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  return (
+    typeof data.pageviews === 'number' &&
+    typeof data.days_with_data === 'number' &&
+    Array.isArray(data.top_paths) &&
+    data.top_paths.every(isReportHumanTopPath) &&
+    Array.isArray(data.top_referrers) &&
+    data.top_referrers.every(isReportHumanTopReferrer) &&
+    Array.isArray(data.top_sources) &&
+    data.top_sources.every(isReportHumanTopSource)
+  );
+}
+
+function isReportHumanObservability(data: unknown): data is ReportHumanObservability {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  return (
+    typeof data.accepted === 'number' &&
+    typeof data.dropped_rate_limited === 'number' &&
+    typeof data.dropped_invalid === 'number' &&
+    isNullableString(data.last_received_at)
+  );
+}
+
+function isReportHumanTraffic(data: unknown): data is ReportHumanTraffic {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  return (
+    isReportHumanToday(data.today) &&
+    isReportHumanLast7Days(data.last_7_days) &&
+    isReportHumanObservability(data.observability)
+  );
+}
+
+function isNullableNumberBoolean(data: unknown): data is number | boolean | null {
+  return typeof data === 'number' || typeof data === 'boolean' || data === null;
 }
 
 function normalizeIdentityWindow(data: unknown): ReportIdentityWindow | undefined {
-  if (!data || typeof data !== 'object') {
+  if (!isRecord(data)) {
     return undefined;
   }
 
-  const record = data as Record<string, unknown>;
   return {
-    new_users: typeof record.new_users === 'number' ? record.new_users : null,
-    returning_users: typeof record.returning_users === 'number' ? record.returning_users : null,
-    sessions: typeof record.sessions === 'number' ? record.sessions : null,
+    new_users: typeof data.new_users === 'number' ? data.new_users : null,
+    returning_users: typeof data.returning_users === 'number' ? data.returning_users : null,
+    sessions: typeof data.sessions === 'number' ? data.sessions : null,
   };
 }
 
 function normalizeIdentityLast7Days(data: unknown): ReportIdentityLast7Days | undefined {
-  if (!data || typeof data !== 'object') {
+  if (!isRecord(data)) {
     return undefined;
   }
 
-  const record = data as Record<string, unknown>;
   return {
-    new_users: typeof record.new_users === 'number' ? record.new_users : null,
-    returning_users: typeof record.returning_users === 'number' ? record.returning_users : null,
-    sessions: typeof record.sessions === 'number' ? record.sessions : null,
-    return_rate: typeof record.return_rate === 'number' ? record.return_rate : null,
+    new_users: typeof data.new_users === 'number' ? data.new_users : null,
+    returning_users: typeof data.returning_users === 'number' ? data.returning_users : null,
+    sessions: typeof data.sessions === 'number' ? data.sessions : null,
+    return_rate: typeof data.return_rate === 'number' ? data.return_rate : null,
   };
 }
 
@@ -359,13 +375,13 @@ function normalizeIdentityTopSources(data: unknown): ReportIdentityTopSource[] {
   }
 
   return data
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    .filter((entry): entry is Record<string, unknown> => isRecord(entry))
     .filter((entry) => typeof entry.source === 'string' && typeof entry.users === 'number')
     .map((entry) => ({ source: entry.source as string, users: entry.users as number }));
 }
 
 function normalizeReportIdentity(data: unknown): ReportIdentity {
-  const record = data as Record<string, unknown>;
+  const record = isRecord(data) ? data : {};
   return {
     today: normalizeIdentityWindow(record.today),
     last_7_days: normalizeIdentityLast7Days(record.last_7_days),
@@ -373,26 +389,13 @@ function normalizeReportIdentity(data: unknown): ReportIdentity {
   };
 }
 
-/**
- * Normalizes an unknown Lighthouse payload into a safe, formatter-ready LighthouseReport.
- * Required core: today.update_checks, today.downloads, today.errors.
- * Optional sections are sanitized: invalid/malformed optional blocks become undefined.
- * Unknown top-level keys are ignored.
- */
-export function normalizeLighthouseReport(data: unknown): LighthouseReport | null {
-  if (!data || typeof data !== 'object') {
+export function normalizeLegacyLighthouseReport(data: unknown): LegacyLighthouseReport | null {
+  if (!isRecord(data) || !isCoreReportWindow(data.today)) {
     return null;
   }
 
-  const record = data as Record<string, unknown>;
-
-  // REQUIRED CORE: today with the three required metrics.
-  if (!isCoreReportWindow(record.today)) {
-    return null;
-  }
-
-  const normalized: LighthouseReport = {
-    today: record.today,
+  const normalized: LegacyLighthouseReport = {
+    today: data.today,
     last_7_days: undefined,
     yesterday: undefined,
     month_to_date: undefined,
@@ -402,193 +405,300 @@ export function normalizeLighthouseReport(data: unknown): LighthouseReport | nul
     trends: undefined,
   };
 
-  // OPTIONAL: last_7_days
-  if ('last_7_days' in record) {
-    if (isCoreReportWindow(record.last_7_days)) {
-      normalized.last_7_days = record.last_7_days;
+  if ('last_7_days' in data) {
+    if (isCoreReportWindow(data.last_7_days)) {
+      normalized.last_7_days = data.last_7_days;
     } else {
       console.warn('[REPORT_VALIDATION_WARN] last_7_days present but invalid; sanitized to undefined');
     }
   }
 
-  // OPTIONAL: yesterday
-  if ('yesterday' in record) {
-    if (isCoreReportWindow(record.yesterday)) {
-      normalized.yesterday = record.yesterday;
+  if ('yesterday' in data) {
+    if (isCoreReportWindow(data.yesterday)) {
+      normalized.yesterday = data.yesterday;
     } else {
       console.warn('[REPORT_VALIDATION_WARN] yesterday present but invalid; sanitized to undefined');
     }
   }
 
-  // OPTIONAL: month_to_date
-  if ('month_to_date' in record) {
-    if (isCoreReportWindow(record.month_to_date)) {
-      normalized.month_to_date = record.month_to_date;
+  if ('month_to_date' in data) {
+    if (isCoreReportWindow(data.month_to_date)) {
+      normalized.month_to_date = data.month_to_date;
     } else {
       console.warn('[REPORT_VALIDATION_WARN] month_to_date present but invalid; sanitized to undefined');
     }
   }
 
-  // OPTIONAL: traffic
-  if ('traffic' in record) {
-    if (isReportTrafficNarrow(record.traffic)) {
-      normalized.traffic = record.traffic as ReportTraffic;
+  if ('traffic' in data) {
+    if (isReportTraffic(data.traffic)) {
+      normalized.traffic = data.traffic;
     } else {
       console.warn('[REPORT_VALIDATION_WARN] traffic present but invalid; sanitized to undefined');
     }
   }
 
-  // OPTIONAL: human_traffic
-  if ('human_traffic' in record) {
-    if (isReportHumanTrafficNarrow(record.human_traffic)) {
-      normalized.human_traffic = record.human_traffic as ReportHumanTraffic;
+  if ('human_traffic' in data) {
+    if (isReportHumanTraffic(data.human_traffic)) {
+      normalized.human_traffic = data.human_traffic;
     } else {
       console.warn('[REPORT_VALIDATION_WARN] human_traffic present but invalid; sanitized to undefined');
     }
   }
 
-  // OPTIONAL: identity
-  if ('identity' in record) {
-    if (isReportIdentityNarrow(record.identity)) {
-      normalized.identity = normalizeReportIdentity(record.identity);
-    } else {
-      console.warn('[REPORT_VALIDATION_WARN] identity present but invalid; sanitized to undefined');
-    }
+  if ('identity' in data) {
+    normalized.identity = normalizeReportIdentity(data.identity);
   }
 
-  // OPTIONAL: trends (opaque, accepted as-is when present)
-  if ('trends' in record) {
-    normalized.trends = record.trends;
+  if ('trends' in data) {
+    normalized.trends = data.trends;
   }
 
   return normalized;
 }
-function isNullableNumber(data: unknown): data is number | null {
-  return typeof data === 'number' || data === null;
+
+function normalizeFleetSite(data: unknown): FleetReportSite | null {
+  if (!isRecord(data) || typeof data.site_key !== 'string') {
+    return null;
+  }
+
+  return {
+    site_key: data.site_key,
+    label: isNullableString(data.label) ? data.label : undefined,
+    backend_source: isNullableString(data.backend_source) ? data.backend_source : undefined,
+    cloudflare_traffic_enabled:
+      typeof data.cloudflare_traffic_enabled === 'boolean' || data.cloudflare_traffic_enabled === null
+        ? data.cloudflare_traffic_enabled
+        : undefined,
+    pageviews_7d: isNullableNumber(data.pageviews_7d) ? data.pageviews_7d : undefined,
+    requests_7d: isNullableNumber(data.requests_7d) ? data.requests_7d : undefined,
+    visits_7d: isNullableNumber(data.visits_7d) ? data.visits_7d : undefined,
+    accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+    has_recent_signal:
+      typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
+        ? data.has_recent_signal
+        : undefined,
+    last_received_at: isNullableString(data.last_received_at) ? data.last_received_at : undefined,
+  };
 }
 
-function isNullableString(data: unknown): data is string | null {
-  return typeof data === 'string' || data === null;
+function normalizeSourceHealthSite(data: unknown): SourceHealthSite | null {
+  if (!isRecord(data) || typeof data.site_key !== 'string') {
+    return null;
+  }
+
+  return {
+    site_key: data.site_key,
+    label: isNullableString(data.label) ? data.label : undefined,
+    accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+    has_recent_signal:
+      typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
+        ? data.has_recent_signal
+        : undefined,
+    last_received_at: isNullableString(data.last_received_at) ? data.last_received_at : undefined,
+    dropped_invalid: isNullableNumber(data.dropped_invalid) ? data.dropped_invalid : undefined,
+    dropped_rate_limited: isNullableNumber(data.dropped_rate_limited) ? data.dropped_rate_limited : undefined,
+    cloudflare_traffic_enabled:
+      typeof data.cloudflare_traffic_enabled === 'boolean' || data.cloudflare_traffic_enabled === null
+        ? data.cloudflare_traffic_enabled
+        : undefined,
+  };
 }
 
-function isReportTrafficLatestDay(data: unknown): data is ReportTrafficLatestDay {
-  if (!data || typeof data !== 'object') {
+function normalizeSiteReportScope(data: unknown): SiteReportScope | null {
+  if (data === null) {
+    return null;
+  }
+  if (!isRecord(data)) {
+    return null;
+  }
+
+  return {
+    site_key: isNullableString(data.site_key) ? data.site_key : undefined,
+    label: isNullableString(data.label) ? data.label : undefined,
+    backend_source: isNullableString(data.backend_source) ? data.backend_source : undefined,
+    cloudflare_traffic_enabled:
+      typeof data.cloudflare_traffic_enabled === 'boolean' || data.cloudflare_traffic_enabled === null
+        ? data.cloudflare_traffic_enabled
+        : undefined,
+  };
+}
+
+function normalizeSiteReportSummary(data: unknown): SiteReportSummary | null {
+  if (data === null) {
+    return null;
+  }
+  if (!isRecord(data)) {
+    return null;
+  }
+
+  return {
+    pageviews_7d: isNullableNumber(data.pageviews_7d) ? data.pageviews_7d : undefined,
+    requests_7d: isNullableNumber(data.requests_7d) ? data.requests_7d : undefined,
+    visits_7d: isNullableNumber(data.visits_7d) ? data.visits_7d : undefined,
+  };
+}
+
+function normalizeSiteReportTraffic(data: unknown): SiteReportTraffic | null {
+  if (data === null) {
+    return null;
+  }
+  if (!isRecord(data)) {
+    return null;
+  }
+
+  const latestDay = isRecord(data.latest_day)
+    ? {
+        day: isNullableString(data.latest_day.day) ? data.latest_day.day : undefined,
+        visits: isNullableNumber(data.latest_day.visits) ? data.latest_day.visits : undefined,
+        requests: isNullableNumber(data.latest_day.requests) ? data.latest_day.requests : undefined,
+        captured_at: isNullableString(data.latest_day.captured_at)
+          ? data.latest_day.captured_at
+          : undefined,
+      }
+    : data.latest_day === null
+      ? null
+      : undefined;
+
+  const last7Days = isRecord(data.last_7_days)
+    ? {
+        visits: isNullableNumber(data.last_7_days.visits) ? data.last_7_days.visits : undefined,
+        requests: isNullableNumber(data.last_7_days.requests) ? data.last_7_days.requests : undefined,
+        avg_daily_visits: isNullableNumber(data.last_7_days.avg_daily_visits)
+          ? data.last_7_days.avg_daily_visits
+          : undefined,
+        avg_daily_requests: isNullableNumber(data.last_7_days.avg_daily_requests)
+          ? data.last_7_days.avg_daily_requests
+          : undefined,
+        days_with_data: isNullableNumber(data.last_7_days.days_with_data)
+          ? data.last_7_days.days_with_data
+          : undefined,
+      }
+    : data.last_7_days === null
+      ? null
+      : undefined;
+
+  return {
+    latest_day: latestDay,
+    last_7_days: last7Days,
+  };
+}
+
+function normalizeSiteReportEvents(data: unknown): SiteReportEvents | null {
+  if (data === null) {
+    return null;
+  }
+  if (!isRecord(data)) {
+    return null;
+  }
+
+  return {
+    accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+    has_recent_signal:
+      typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
+        ? data.has_recent_signal
+        : undefined,
+    last_received_at: isNullableString(data.last_received_at) ? data.last_received_at : undefined,
+  };
+}
+
+function normalizeSiteReportHealth(data: unknown): SiteReportHealth | null {
+  if (data === null) {
+    return null;
+  }
+  if (!isRecord(data)) {
+    return null;
+  }
+
+  return {
+    dropped_invalid: isNullableNumber(data.dropped_invalid) ? data.dropped_invalid : undefined,
+    dropped_rate_limited: isNullableNumber(data.dropped_rate_limited) ? data.dropped_rate_limited : undefined,
+  };
+}
+
+export function normalizeFleetLighthouseReport(data: unknown): FleetLighthouseReport | null {
+  if (!isRecord(data) || data.view !== 'fleet' || !Array.isArray(data.sites)) {
+    return null;
+  }
+
+  const sites = data.sites
+    .map((site) => normalizeFleetSite(site))
+    .filter((site): site is FleetReportSite => site !== null);
+
+  return {
+    view: 'fleet',
+    generated_at: isNullableString(data.generated_at) ? data.generated_at : null,
+    sites,
+  };
+}
+
+export function normalizeSiteLighthouseReport(data: unknown): SiteLighthouseReport | null {
+  if (!isRecord(data) || data.view !== 'site') {
+    return null;
+  }
+
+  return {
+    view: 'site',
+    generated_at: isNullableString(data.generated_at) ? data.generated_at : null,
+    scope: normalizeSiteReportScope(data.scope),
+    summary: normalizeSiteReportSummary(data.summary),
+    traffic: normalizeSiteReportTraffic(data.traffic),
+    events: normalizeSiteReportEvents(data.events),
+    health: normalizeSiteReportHealth(data.health),
+  };
+}
+
+export function normalizeSourceHealthLighthouseReport(data: unknown): SourceHealthLighthouseReport | null {
+  if (!isRecord(data) || data.view !== 'source_health' || !Array.isArray(data.sites)) {
+    return null;
+  }
+
+  const sites = data.sites
+    .map((site) => normalizeSourceHealthSite(site))
+    .filter((site): site is SourceHealthSite => site !== null);
+
+  return {
+    view: 'source_health',
+    generated_at: isNullableString(data.generated_at) ? data.generated_at : null,
+    sites,
+  };
+}
+
+export function isLighthouseErrorPayload(data: unknown): data is LighthouseErrorPayload {
+  if (!isRecord(data)) {
     return false;
   }
 
-  const record = data as Record<string, unknown>;
   return (
-    isNullableString(record.day) &&
-    isNullableNumber(record.visits) &&
-    isNullableNumber(record.requests) &&
-    isNullableString(record.captured_at)
+    data.ok === false &&
+    (data.error === 'invalid_view' ||
+      data.error === 'missing_site_key' ||
+      data.error === 'invalid_site_key')
   );
 }
 
-function isReportTrafficLast7Days(data: unknown): data is ReportTrafficLast7Days {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
+export function normalizeLighthousePayload(
+  data: unknown,
+  request: LighthouseReportRequest,
+): LighthouseReportPayload | null {
+  if (request.view === 'legacy') {
+    return normalizeLegacyLighthouseReport(data);
+  }
 
-    const record = data as Record<string, unknown>;
-    return (
-      isNullableNumber(record.visits) &&
-      isNullableNumber(record.requests) &&
-      isNullableNumber(record.avg_daily_visits) &&
-      isNullableNumber(record.avg_daily_requests) &&
-      isNullableNumber(record.days_with_data)
-    );
+  if (request.view === 'fleet') {
+    return normalizeFleetLighthouseReport(data);
+  }
+
+  if (request.view === 'site') {
+    return normalizeSiteLighthouseReport(data);
+  }
+
+  return normalizeSourceHealthLighthouseReport(data);
 }
 
-function isReportTraffic(data: unknown): data is ReportTraffic {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const record = data as Record<string, unknown>;
-    return (
-      isReportTrafficLatestDay(record.latest_day) &&
-      isReportTrafficLast7Days(record.last_7_days)
-    );
+export function isLighthouseReport(data: unknown): data is LegacyLighthouseReport {
+  return normalizeLegacyLighthouseReport(data) !== null;
 }
 
-function isReportHumanTopPath(data: unknown): data is ReportHumanTopPath {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const record = data as Record<string, unknown>;
-    return typeof record.path === 'string' && typeof record.pageviews === 'number';
-}
-
-function isReportHumanTopReferrer(data: unknown): data is ReportHumanTopReferrer {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const record = data as Record<string, unknown>;
-    return typeof record.referrer_domain === 'string' && typeof record.pageviews === 'number';
-}
-
-function isReportHumanTopSource(data: unknown): data is ReportHumanTopSource {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const record = data as Record<string, unknown>;
-    return typeof record.source === 'string' && typeof record.pageviews === 'number';
-}
-
-function isReportHumanToday(data: unknown): data is ReportHumanToday {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const record = data as Record<string, unknown>;
-    return typeof record.pageviews === 'number' && typeof record.last_received_at === 'string';
-}
-
-function isReportHumanLast7Days(data: unknown): data is ReportHumanLast7Days {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const record = data as Record<string, unknown>;
-    return (
-      typeof record.pageviews === 'number' &&
-      typeof record.days_with_data === 'number' &&
-      Array.isArray(record.top_paths) &&
-      record.top_paths.every(isReportHumanTopPath) &&
-      Array.isArray(record.top_referrers) &&
-      record.top_referrers.every(isReportHumanTopReferrer) &&
-      Array.isArray(record.top_sources) &&
-      record.top_sources.every(isReportHumanTopSource)
-    );
-}
-
-function isReportHumanObservability(data: unknown): data is ReportHumanObservability {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const record = data as Record<string, unknown>;
-    return (
-      typeof record.accepted === 'number' &&
-      typeof record.dropped_rate_limited === 'number' &&
-      typeof record.dropped_invalid === 'number' &&
-      typeof record.last_received_at === 'string'
-    );
-}
-
-function isReportHumanTraffic(data: unknown): data is ReportHumanTraffic {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const record = data as Record<string, unknown>;
-    return (
-      isReportHumanToday(record.today) &&
-      isReportHumanLast7Days(record.last_7_days) &&
-      isReportHumanObservability(record.observability)
-    );
+export function normalizeLighthouseReport(data: unknown): LegacyLighthouseReport | null {
+  return normalizeLegacyLighthouseReport(data);
 }

@@ -1,10 +1,10 @@
 {
   "name": "agent_smith",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "description": "Agent Smith is a Cloudflare-native, deterministic, personal-use watcher.",
   "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"No tests yet\" && exit 0",
+    "test": "tsx --test tests/report_contract.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "start": "wrangler dev",
@@ -24,6 +24,7 @@
   "homepage": "https://github.com/truegoodcraft/Agent_Smith#readme",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240320.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.4.3",
     "wrangler": "^3.39.0"
   },

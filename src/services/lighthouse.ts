@@ -1,12 +1,21 @@
 // src/services/lighthouse.ts
 
 import { Env } from '../types';
-import { LighthouseReport, normalizeLighthouseReport } from '../types/telemetry';
+import {
+  LighthouseErrorPayload,
+  LighthouseReportPayload,
+  LighthouseReportRequest,
+  normalizeLighthousePayload,
+  isLighthouseErrorPayload,
+} from '../types/telemetry';
 
 export class LighthouseError extends Error {
-  constructor(message: string) {
+  code?: LighthouseErrorPayload['error'];
+
+  constructor(message: string, code?: LighthouseErrorPayload['error']) {
     super(message);
     this.name = 'LighthouseError';
+    this.code = code;
   }
 }
 
@@ -16,12 +25,35 @@ export class LighthouseError extends Error {
  * @returns A validated LighthouseReport object.
  * @throws {LighthouseError} If the fetch fails, the response is not OK, or the payload is invalid.
  */
-export async function getLighthouseReport(env: Env): Promise<LighthouseReport> {
-  const url = env.LIGHTHOUSE_REPORT_URL;
+function buildReportUrl(baseUrl: string, request: LighthouseReportRequest): string {
+  const url = new URL(baseUrl);
 
-  if (!url) {
+  if (request.view !== 'legacy') {
+    url.searchParams.set('view', request.view);
+  } else {
+    url.searchParams.delete('view');
+  }
+
+  if (request.view === 'site' && request.siteKey) {
+    url.searchParams.set('site_key', request.siteKey);
+  } else {
+    url.searchParams.delete('site_key');
+  }
+
+  return url.toString();
+}
+
+export async function getLighthouseReport(
+  env: Env,
+  request: LighthouseReportRequest = { view: 'legacy' },
+): Promise<LighthouseReportPayload> {
+  const baseUrl = env.LIGHTHOUSE_REPORT_URL;
+
+  if (!baseUrl) {
     throw new LighthouseError('LIGHTHOUSE_REPORT_URL is not configured.');
   }
+
+  const url = buildReportUrl(baseUrl, request);
 
   let response: Response;
   try {
@@ -36,14 +68,6 @@ export async function getLighthouseReport(env: Env): Promise<LighthouseReport> {
     throw new LighthouseError('Failed to fetch from Lighthouse service.');
   }
 
-  if (!response.ok) {
-    throw new LighthouseError(
-      `Lighthouse service returned an error: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  console.log('[REPORT_FETCH_OK] Lighthouse HTTP 200 received');
-
   let data: unknown;
   try {
     data = await response.json();
@@ -54,12 +78,24 @@ export async function getLighthouseReport(env: Env): Promise<LighthouseReport> {
 
   console.log('[REPORT_JSON_OK] Lighthouse response parsed successfully');
 
+  if (!response.ok) {
+    if (response.status === 400 && isLighthouseErrorPayload(data)) {
+      throw new LighthouseError(`Lighthouse request rejected: ${data.error}`, data.error);
+    }
+
+    throw new LighthouseError(
+      `Lighthouse service returned an error: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  console.log('[REPORT_FETCH_OK] Lighthouse HTTP 200 received');
+
   if (data && typeof data === 'object') {
     const topLevelKeys = Object.keys(data as Record<string, unknown>).sort();
     console.log('[REPORT_TOP_LEVEL_KEYS]', topLevelKeys.join(', '));
   }
 
-  const normalizedReport = normalizeLighthouseReport(data);
+  const normalizedReport = normalizeLighthousePayload(data, request);
 
   if (!normalizedReport) {
     console.error('[REPORT_VALIDATION_FAIL] Payload failed schema validation');

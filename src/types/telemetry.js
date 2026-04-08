@@ -1,322 +1,395 @@
-// src/types/telemetry.ts
-/**
- * A type guard to validate if an object conforms to the LighthouseReport structure.
- * LENIENT validation: Only requires core fields (today.{update_checks, downloads, errors} and optionally last_7_days with same fields).
- * All other sections are optional and ignored if malformed.
- * Unknown top-level keys are tolerated.
- */
-export function isLighthouseReport(data) {
-    if (!data || typeof data !== 'object') {
-        return false;
-    }
-    // REQUIRED: today with the three core metric fields
-    const hasToday = 'today' in data && isCoreReportWindow(data.today);
-    if (!hasToday) {
-        console.warn('[REPORT_VALIDATION_WARN] Missing or invalid today section with core fields (update_checks, downloads, errors)');
-        return false;
-    }
-    // OPTIONAL: last_7_days, but if present must have the three core metric fields
-    const hasOptionalLast7Days = !('last_7_days' in data) || isCoreReportWindow(data.last_7_days);
-    if (!hasOptionalLast7Days) {
-        console.warn('[REPORT_VALIDATION_WARN] Skipping last_7_days; present but missing core fields (update_checks, downloads, errors)');
-    }
-    // OPTIONAL: yesterday - only validate if present
-    if ('yesterday' in data && !isCoreReportWindow(data.yesterday)) {
-        console.warn('[REPORT_VALIDATION_WARN] yesterday present but not a valid ReportWindow; will be skipped');
-    }
-    // OPTIONAL: month_to_date - only validate if present
-    if ('month_to_date' in data && !isCoreReportWindow(data.month_to_date)) {
-        console.warn('[REPORT_VALIDATION_WARN] month_to_date present but not a valid ReportWindow; will be skipped');
-    }
-    // OPTIONAL: traffic - only validate narrowly if present
-    if ('traffic' in data && !isReportTrafficNarrow(data.traffic)) {
-        console.warn('[REPORT_VALIDATION_WARN] traffic present but does not match expected structure; will be skipped');
-    }
-    // OPTIONAL: human_traffic - only validate narrowly if present
-    if ('human_traffic' in data && !isReportHumanTrafficNarrow(data.human_traffic)) {
-        console.warn('[REPORT_VALIDATION_WARN] human_traffic present but does not match expected structure; will be skipped');
-    }
-    // OPTIONAL: trends - ignored
-    // OPTIONAL: observability - ignored
-    // OPTIONAL: any unknown top-level keys - ignored
-    // Success: We have the required today section with core fields, and optional sections don't fail us
-    return hasOptionalLast7Days;
+function isRecord(data) {
+    return Boolean(data) && typeof data === 'object' && !Array.isArray(data);
 }
-/**
- * Core metric fields validator (narrow): checks only for update_checks, downloads, errors.
- * Used for required and core-optional sections.
- */
+function isNullableNumber(data) {
+    return typeof data === 'number' || data === null;
+}
+function isNullableString(data) {
+    return typeof data === 'string' || data === null;
+}
 function isCoreReportWindow(data) {
-    if (!data || typeof data !== 'object') {
+    if (!isRecord(data)) {
         return false;
     }
     return (typeof data.update_checks === 'number' &&
         typeof data.downloads === 'number' &&
         typeof data.errors === 'number');
 }
-/**
- * A type guard to validate if an object conforms to the ReportWindow structure.
- * Checks for all three fields: update_checks, downloads, errors.
- * NOTE: See isCoreReportWindow for the lenient version used in validation.
- */
-function isReportWindow(data) {
-    if (!data || typeof data !== 'object') {
+function isReportTrafficLatestDay(data) {
+    if (!isRecord(data)) {
         return false;
     }
-    return (typeof data.update_checks === 'number' &&
-        typeof data.downloads === 'number' &&
-        typeof data.errors === 'number');
+    return (isNullableString(data.day) &&
+        isNullableNumber(data.visits) &&
+        isNullableNumber(data.requests) &&
+        isNullableString(data.captured_at));
 }
-/**
- * Narrow validator for the traffic section (optional).
- * Only validates the structure that /report actually uses:
- * latest_day.day, latest_day.captured_at, latest_day.requests, latest_day.visits
- * last_7_days.requests, last_7_days.visits, last_7_days.avg_daily_requests, last_7_days.avg_daily_visits, last_7_days.days_with_data
- * If any of these critical fields are missing or malformed, returns false and traffic will be skipped.
- */
-function isReportTrafficNarrow(data) {
-    if (!data || typeof data !== 'object') {
+function isReportTrafficLast7Days(data) {
+    if (!isRecord(data)) {
         return false;
     }
-    // Check latest_day section minimally
-    if ('latest_day' in data) {
-        const ld = data.latest_day;
-        if (!ld || typeof ld !== 'object')
-            return false;
-        // latest_day is used in formatting, check it has expected shape
-        if (!('day' in ld && 'visits' in ld && 'requests' in ld && 'captured_at' in ld))
-            return false;
+    return (isNullableNumber(data.visits) &&
+        isNullableNumber(data.requests) &&
+        isNullableNumber(data.avg_daily_visits) &&
+        isNullableNumber(data.avg_daily_requests) &&
+        isNullableNumber(data.days_with_data));
+}
+function isReportTraffic(data) {
+    if (!isRecord(data)) {
+        return false;
     }
-    // Check last_7_days section minimally
-    if ('last_7_days' in data) {
-        const l7d = data.last_7_days;
-        if (!l7d || typeof l7d !== 'object')
-            return false;
-        // last_7_days must have the fields /report uses
-        if (!('visits' in l7d && 'requests' in l7d && 'avg_daily_visits' in l7d && 'avg_daily_requests' in l7d && 'days_with_data' in l7d)) {
-            return false;
-        }
+    return (isReportTrafficLatestDay(data.latest_day) &&
+        isReportTrafficLast7Days(data.last_7_days));
+}
+function isReportHumanTopPath(data) {
+    return isRecord(data) && typeof data.path === 'string' && typeof data.pageviews === 'number';
+}
+function isReportHumanTopReferrer(data) {
+    return isRecord(data) && typeof data.referrer_domain === 'string' && typeof data.pageviews === 'number';
+}
+function isReportHumanTopSource(data) {
+    return isRecord(data) && typeof data.source === 'string' && typeof data.pageviews === 'number';
+}
+function isReportHumanToday(data) {
+    if (!isRecord(data)) {
+        return false;
     }
-    return true;
-        * Normalizes;
-    an;
-    unknown;
-    Lighthouse;
-    payload;
-    into;
-    a;
-    safe, formatter - ready;
-    LighthouseReport.
-        * Required;
-    core: today.update_checks, today.downloads, today.errors.
-        * Optional;
-    sections;
-    are;
-    sanitized: invalid / malformed;
-    optional;
-    blocks;
-    become;
-    undefined.
-        * Unknown;
-    top - level;
-    keys;
-    are;
-    ignored.
-        * Validates;
-    the;
-    structure;
-    minimally: today.pageviews, last_7_days.pageviews, observability.accepted.
-    ;
-    export function normalizeLighthouseReport(data) {
-            * /;
+    return typeof data.pageviews === 'number' && isNullableString(data.last_received_at);
+}
+function isReportHumanLast7Days(data) {
+    if (!isRecord(data)) {
+        return false;
+    }
+    return (typeof data.pageviews === 'number' &&
+        typeof data.days_with_data === 'number' &&
+        Array.isArray(data.top_paths) &&
+        data.top_paths.every(isReportHumanTopPath) &&
+        Array.isArray(data.top_referrers) &&
+        data.top_referrers.every(isReportHumanTopReferrer) &&
+        Array.isArray(data.top_sources) &&
+        data.top_sources.every(isReportHumanTopSource));
+}
+function isReportHumanObservability(data) {
+    if (!isRecord(data)) {
+        return false;
+    }
+    return (typeof data.accepted === 'number' &&
+        typeof data.dropped_rate_limited === 'number' &&
+        typeof data.dropped_invalid === 'number' &&
+        isNullableString(data.last_received_at));
+}
+function isReportHumanTraffic(data) {
+    if (!isRecord(data)) {
+        return false;
+    }
+    return (isReportHumanToday(data.today) &&
+        isReportHumanLast7Days(data.last_7_days) &&
+        isReportHumanObservability(data.observability));
+}
+function isNullableNumberBoolean(data) {
+    return typeof data === 'number' || typeof data === 'boolean' || data === null;
+}
+function normalizeIdentityWindow(data) {
+    if (!isRecord(data)) {
+        return undefined;
+    }
+    return {
+        new_users: typeof data.new_users === 'number' ? data.new_users : null,
+        returning_users: typeof data.returning_users === 'number' ? data.returning_users : null,
+        sessions: typeof data.sessions === 'number' ? data.sessions : null,
+    };
+}
+function normalizeIdentityLast7Days(data) {
+    if (!isRecord(data)) {
+        return undefined;
+    }
+    return {
+        new_users: typeof data.new_users === 'number' ? data.new_users : null,
+        returning_users: typeof data.returning_users === 'number' ? data.returning_users : null,
+        sessions: typeof data.sessions === 'number' ? data.sessions : null,
+        return_rate: typeof data.return_rate === 'number' ? data.return_rate : null,
+    };
+}
+function normalizeIdentityTopSources(data) {
+    if (!Array.isArray(data)) {
+        return [];
+    }
+    return data
+        .filter((entry) => isRecord(entry))
+        .filter((entry) => typeof entry.source === 'string' && typeof entry.users === 'number')
+        .map((entry) => ({ source: entry.source, users: entry.users }));
+}
+function normalizeReportIdentity(data) {
+    const record = isRecord(data) ? data : {};
+    return {
+        today: normalizeIdentityWindow(record.today),
+        last_7_days: normalizeIdentityLast7Days(record.last_7_days),
+        top_sources_by_returning_users: normalizeIdentityTopSources(record.top_sources_by_returning_users),
+    };
+}
+export function normalizeLegacyLighthouseReport(data) {
+    if (!isRecord(data) || !isCoreReportWindow(data.today)) {
         return null;
-        if (!data || typeof data !== 'object') {
-            const record = data;
-            return false;
-            // REQUIRED CORE: today with the three required metrics.
-            if (!isCoreReportWindow(record.today)) {
-                if ('today' in data) {
-                    return null;
-                    if (!today || typeof today !== 'object')
-                        return false;
-                    if (typeof today.pageviews !== 'number')
-                        return false;
-                    const normalized = {
-                        today: record.today,
-                        last_7_days: undefined,
-                        yesterday: undefined,
-                        month_to_date: undefined,
-                        traffic: undefined,
-                        human_traffic: undefined,
-                        trends: undefined,
-                    };
-                    // OPTIONAL: last_7_days
-                    if ('last_7_days' in record) {
-                        if (isCoreReportWindow(record.last_7_days)) {
-                            normalized.last_7_days = record.last_7_days;
-                        }
-                        else {
-                            console.warn('[REPORT_VALIDATION_WARN] last_7_days present but invalid; sanitized to undefined');
-                        }
-                    }
-                    // OPTIONAL: yesterday
-                    if ('yesterday' in record) {
-                        if (isCoreReportWindow(record.yesterday)) {
-                            normalized.yesterday = record.yesterday;
-                        }
-                        else {
-                            console.warn('[REPORT_VALIDATION_WARN] yesterday present but invalid; sanitized to undefined');
-                        }
-                    }
-                    // OPTIONAL: month_to_date
-                    if ('month_to_date' in record) {
-                        if (isCoreReportWindow(record.month_to_date)) {
-                            normalized.month_to_date = record.month_to_date;
-                        }
-                        else {
-                            console.warn('[REPORT_VALIDATION_WARN] month_to_date present but invalid; sanitized to undefined');
-                        }
-                    }
-                    // OPTIONAL: traffic
-                    if ('traffic' in record) {
-                        if (isReportTraffic(record.traffic)) {
-                            normalized.traffic = record.traffic;
-                        }
-                        else {
-                            console.warn('[REPORT_VALIDATION_WARN] traffic present but invalid; sanitized to undefined');
-                        }
-                    }
-                    // OPTIONAL: human_traffic
-                    if ('human_traffic' in record) {
-                        if (isReportHumanTraffic(record.human_traffic)) {
-                            normalized.human_traffic = record.human_traffic;
-                        }
-                        else {
-                            console.warn('[REPORT_VALIDATION_WARN] human_traffic present but invalid; sanitized to undefined');
-                        }
-                    }
-                    // OPTIONAL: trends (opaque, accepted as-is when present)
-                    if ('trends' in record) {
-                        normalized.trends = record.trends;
-                    }
-                    return normalized;
-                }
-                /**
-                 * Backward-compatible validator wrapper.
-                 * True only when normalization succeeds for required core fields.
-                 */
-                export function isLighthouseReport(data) {
-                    return normalizeLighthouseReport(data) !== null;
-                }
-                /**
-                 * Core metric fields validator (narrow): checks only for update_checks, downloads, errors.
-                 */
-                function isCoreReportWindow(data) {
-                    if (!data || typeof data !== 'object') {
-                        return false;
-                    }
-                    const record = data;
-                    return (typeof record.update_checks === 'number' &&
-                        typeof record.downloads === 'number' &&
-                        typeof record.errors === 'number');
-                }
-                function isNullableNumber(data) {
-                    return typeof data === 'number' || data === null;
-                }
-                function isNullableString(data) {
-                    return typeof data === 'string' || data === null;
-                }
-                function isReportTrafficLatestDay(data) {
-                    if (!data || typeof data !== 'object') {
-                        return false;
-                    }
-                    const record = data;
-                    return (isNullableString(record.day) &&
-                        isNullableNumber(record.visits) &&
-                        isNullableNumber(record.requests) &&
-                        isNullableString(record.captured_at));
-                }
-                function isReportTrafficLast7Days(data) {
-                    if (!data || typeof data !== 'object') {
-                        return false;
-                    }
-                    const record = data;
-                    return (isNullableNumber(record.visits) &&
-                        isNullableNumber(record.requests) &&
-                        isNullableNumber(record.avg_daily_visits) &&
-                        isNullableNumber(record.avg_daily_requests) &&
-                        isNullableNumber(record.days_with_data));
-                }
-                function isReportTraffic(data) {
-                    if (!data || typeof data !== 'object') {
-                        return false;
-                    }
-                    const record = data;
-                    return (isReportTrafficLatestDay(record.latest_day) &&
-                        isReportTrafficLast7Days(record.last_7_days));
-                }
-                function isReportHumanTopPath(data) {
-                    if (!data || typeof data !== 'object') {
-                        return false;
-                    }
-                    const record = data;
-                    return typeof record.path === 'string' && typeof record.pageviews === 'number';
-                }
-                function isReportHumanTopReferrer(data) {
-                    if (!data || typeof data !== 'object') {
-                        return false;
-                    }
-                    const record = data;
-                    return typeof record.referrer_domain === 'string' && typeof record.pageviews === 'number';
-                }
-                function isReportHumanTopSource(data) {
-                    if (!data || typeof data !== 'object') {
-                        return false;
-                    }
-                    const record = data;
-                    return typeof record.source === 'string' && typeof record.pageviews === 'number';
-                }
-                function isReportHumanToday(data) {
-                    if (!data || typeof data !== 'object') {
-                        return false;
-                    }
-                    const record = data;
-                    return typeof record.pageviews === 'number' && typeof record.last_received_at === 'string';
-                }
-                function isReportHumanLast7Days(data) {
-                    if (!data || typeof data !== 'object') {
-                        return false;
-                    }
-                    const record = data;
-                    return (typeof record.pageviews === 'number' &&
-                        typeof record.days_with_data === 'number' &&
-                        Array.isArray(record.top_paths) &&
-                        record.top_paths.every(isReportHumanTopPath) &&
-                        Array.isArray(record.top_referrers) &&
-                        record.top_referrers.every(isReportHumanTopReferrer) &&
-                        Array.isArray(record.top_sources) &&
-                        record.top_sources.every(isReportHumanTopSource));
-                }
-                function isReportHumanObservability(data) {
-                    if (!data || typeof data !== 'object') {
-                        return false;
-                    }
-                    const record = data;
-                    return (typeof record.accepted === 'number' &&
-                        typeof record.dropped_rate_limited === 'number' &&
-                        typeof record.dropped_invalid === 'number' &&
-                        typeof record.last_received_at === 'string');
-                }
-                function isReportHumanTraffic(data) {
-                    if (!data || typeof data !== 'object') {
-                        return false;
-                    }
-                    const record = data;
-                    return (isReportHumanToday(record.today) &&
-                        isReportHumanLast7Days(record.last_7_days) &&
-                        isReportHumanObservability(record.observability));
-                }
-            }
+    }
+    const normalized = {
+        today: data.today,
+        last_7_days: undefined,
+        yesterday: undefined,
+        month_to_date: undefined,
+        traffic: undefined,
+        human_traffic: undefined,
+        identity: undefined,
+        trends: undefined,
+    };
+    if ('last_7_days' in data) {
+        if (isCoreReportWindow(data.last_7_days)) {
+            normalized.last_7_days = data.last_7_days;
+        }
+        else {
+            console.warn('[REPORT_VALIDATION_WARN] last_7_days present but invalid; sanitized to undefined');
         }
     }
+    if ('yesterday' in data) {
+        if (isCoreReportWindow(data.yesterday)) {
+            normalized.yesterday = data.yesterday;
+        }
+        else {
+            console.warn('[REPORT_VALIDATION_WARN] yesterday present but invalid; sanitized to undefined');
+        }
+    }
+    if ('month_to_date' in data) {
+        if (isCoreReportWindow(data.month_to_date)) {
+            normalized.month_to_date = data.month_to_date;
+        }
+        else {
+            console.warn('[REPORT_VALIDATION_WARN] month_to_date present but invalid; sanitized to undefined');
+        }
+    }
+    if ('traffic' in data) {
+        if (isReportTraffic(data.traffic)) {
+            normalized.traffic = data.traffic;
+        }
+        else {
+            console.warn('[REPORT_VALIDATION_WARN] traffic present but invalid; sanitized to undefined');
+        }
+    }
+    if ('human_traffic' in data) {
+        if (isReportHumanTraffic(data.human_traffic)) {
+            normalized.human_traffic = data.human_traffic;
+        }
+        else {
+            console.warn('[REPORT_VALIDATION_WARN] human_traffic present but invalid; sanitized to undefined');
+        }
+    }
+    if ('identity' in data) {
+        normalized.identity = normalizeReportIdentity(data.identity);
+    }
+    if ('trends' in data) {
+        normalized.trends = data.trends;
+    }
+    return normalized;
+}
+function normalizeFleetSite(data) {
+    if (!isRecord(data) || typeof data.site_key !== 'string') {
+        return null;
+    }
+    return {
+        site_key: data.site_key,
+        label: isNullableString(data.label) ? data.label : undefined,
+        backend_source: isNullableString(data.backend_source) ? data.backend_source : undefined,
+        cloudflare_traffic_enabled: typeof data.cloudflare_traffic_enabled === 'boolean' || data.cloudflare_traffic_enabled === null
+            ? data.cloudflare_traffic_enabled
+            : undefined,
+        pageviews_7d: isNullableNumber(data.pageviews_7d) ? data.pageviews_7d : undefined,
+        requests_7d: isNullableNumber(data.requests_7d) ? data.requests_7d : undefined,
+        visits_7d: isNullableNumber(data.visits_7d) ? data.visits_7d : undefined,
+        accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+        has_recent_signal: typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
+            ? data.has_recent_signal
+            : undefined,
+        last_received_at: isNullableString(data.last_received_at) ? data.last_received_at : undefined,
+    };
+}
+function normalizeSourceHealthSite(data) {
+    if (!isRecord(data) || typeof data.site_key !== 'string') {
+        return null;
+    }
+    return {
+        site_key: data.site_key,
+        label: isNullableString(data.label) ? data.label : undefined,
+        accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+        has_recent_signal: typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
+            ? data.has_recent_signal
+            : undefined,
+        last_received_at: isNullableString(data.last_received_at) ? data.last_received_at : undefined,
+        dropped_invalid: isNullableNumber(data.dropped_invalid) ? data.dropped_invalid : undefined,
+        dropped_rate_limited: isNullableNumber(data.dropped_rate_limited) ? data.dropped_rate_limited : undefined,
+        cloudflare_traffic_enabled: typeof data.cloudflare_traffic_enabled === 'boolean' || data.cloudflare_traffic_enabled === null
+            ? data.cloudflare_traffic_enabled
+            : undefined,
+    };
+}
+function normalizeSiteReportScope(data) {
+    if (data === null) {
+        return null;
+    }
+    if (!isRecord(data)) {
+        return null;
+    }
+    return {
+        site_key: isNullableString(data.site_key) ? data.site_key : undefined,
+        label: isNullableString(data.label) ? data.label : undefined,
+        backend_source: isNullableString(data.backend_source) ? data.backend_source : undefined,
+        cloudflare_traffic_enabled: typeof data.cloudflare_traffic_enabled === 'boolean' || data.cloudflare_traffic_enabled === null
+            ? data.cloudflare_traffic_enabled
+            : undefined,
+    };
+}
+function normalizeSiteReportSummary(data) {
+    if (data === null) {
+        return null;
+    }
+    if (!isRecord(data)) {
+        return null;
+    }
+    return {
+        pageviews_7d: isNullableNumber(data.pageviews_7d) ? data.pageviews_7d : undefined,
+        requests_7d: isNullableNumber(data.requests_7d) ? data.requests_7d : undefined,
+        visits_7d: isNullableNumber(data.visits_7d) ? data.visits_7d : undefined,
+    };
+}
+function normalizeSiteReportTraffic(data) {
+    if (data === null) {
+        return null;
+    }
+    if (!isRecord(data)) {
+        return null;
+    }
+    const latestDay = isRecord(data.latest_day)
+        ? {
+            day: isNullableString(data.latest_day.day) ? data.latest_day.day : undefined,
+            visits: isNullableNumber(data.latest_day.visits) ? data.latest_day.visits : undefined,
+            requests: isNullableNumber(data.latest_day.requests) ? data.latest_day.requests : undefined,
+            captured_at: isNullableString(data.latest_day.captured_at)
+                ? data.latest_day.captured_at
+                : undefined,
+        }
+        : data.latest_day === null
+            ? null
+            : undefined;
+    const last7Days = isRecord(data.last_7_days)
+        ? {
+            visits: isNullableNumber(data.last_7_days.visits) ? data.last_7_days.visits : undefined,
+            requests: isNullableNumber(data.last_7_days.requests) ? data.last_7_days.requests : undefined,
+            avg_daily_visits: isNullableNumber(data.last_7_days.avg_daily_visits)
+                ? data.last_7_days.avg_daily_visits
+                : undefined,
+            avg_daily_requests: isNullableNumber(data.last_7_days.avg_daily_requests)
+                ? data.last_7_days.avg_daily_requests
+                : undefined,
+            days_with_data: isNullableNumber(data.last_7_days.days_with_data)
+                ? data.last_7_days.days_with_data
+                : undefined,
+        }
+        : data.last_7_days === null
+            ? null
+            : undefined;
+    return {
+        latest_day: latestDay,
+        last_7_days: last7Days,
+    };
+}
+function normalizeSiteReportEvents(data) {
+    if (data === null) {
+        return null;
+    }
+    if (!isRecord(data)) {
+        return null;
+    }
+    return {
+        accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+        has_recent_signal: typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
+            ? data.has_recent_signal
+            : undefined,
+        last_received_at: isNullableString(data.last_received_at) ? data.last_received_at : undefined,
+    };
+}
+function normalizeSiteReportHealth(data) {
+    if (data === null) {
+        return null;
+    }
+    if (!isRecord(data)) {
+        return null;
+    }
+    return {
+        dropped_invalid: isNullableNumber(data.dropped_invalid) ? data.dropped_invalid : undefined,
+        dropped_rate_limited: isNullableNumber(data.dropped_rate_limited) ? data.dropped_rate_limited : undefined,
+    };
+}
+export function normalizeFleetLighthouseReport(data) {
+    if (!isRecord(data) || data.view !== 'fleet' || !Array.isArray(data.sites)) {
+        return null;
+    }
+    const sites = data.sites
+        .map((site) => normalizeFleetSite(site))
+        .filter((site) => site !== null);
+    return {
+        view: 'fleet',
+        generated_at: isNullableString(data.generated_at) ? data.generated_at : null,
+        sites,
+    };
+}
+export function normalizeSiteLighthouseReport(data) {
+    if (!isRecord(data) || data.view !== 'site') {
+        return null;
+    }
+    return {
+        view: 'site',
+        generated_at: isNullableString(data.generated_at) ? data.generated_at : null,
+        scope: normalizeSiteReportScope(data.scope),
+        summary: normalizeSiteReportSummary(data.summary),
+        traffic: normalizeSiteReportTraffic(data.traffic),
+        events: normalizeSiteReportEvents(data.events),
+        health: normalizeSiteReportHealth(data.health),
+    };
+}
+export function normalizeSourceHealthLighthouseReport(data) {
+    if (!isRecord(data) || data.view !== 'source_health' || !Array.isArray(data.sites)) {
+        return null;
+    }
+    const sites = data.sites
+        .map((site) => normalizeSourceHealthSite(site))
+        .filter((site) => site !== null);
+    return {
+        view: 'source_health',
+        generated_at: isNullableString(data.generated_at) ? data.generated_at : null,
+        sites,
+    };
+}
+export function isLighthouseErrorPayload(data) {
+    if (!isRecord(data)) {
+        return false;
+    }
+    return (data.ok === false &&
+        (data.error === 'invalid_view' ||
+            data.error === 'missing_site_key' ||
+            data.error === 'invalid_site_key'));
+}
+export function normalizeLighthousePayload(data, request) {
+    if (request.view === 'legacy') {
+        return normalizeLegacyLighthouseReport(data);
+    }
+    if (request.view === 'fleet') {
+        return normalizeFleetLighthouseReport(data);
+    }
+    if (request.view === 'site') {
+        return normalizeSiteLighthouseReport(data);
+    }
+    return normalizeSourceHealthLighthouseReport(data);
+}
+export function isLighthouseReport(data) {
+    return normalizeLegacyLighthouseReport(data) !== null;
+}
+export function normalizeLighthouseReport(data) {
+    return normalizeLegacyLighthouseReport(data);
 }

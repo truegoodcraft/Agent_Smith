@@ -44,18 +44,31 @@ function toSiteKey(input?: string): SiteKey | undefined {
 }
 
 function parseReportRequest(interaction: APIApplicationCommandInteraction): LighthouseReportRequest {
-  const view = toView(getStringOption(interaction, 'view'));
   const site = toSiteKey(getStringOption(interaction, 'site'));
+  const rawView = getStringOption(interaction, 'view');
+  const view = toView(rawView);
 
-  if (view === 'site') {
+  if (site) {
     return {
-      view,
+      view: 'site',
       siteKey: site,
     };
   }
 
+  if (view === 'site') {
+    return {
+      view,
+    };
+  }
+
+  if (rawView && (view === 'legacy' || view === 'source_health' || view === 'fleet')) {
+    return {
+      view,
+    };
+  }
+
   return {
-    view,
+    view: 'fleet',
   };
 }
 
@@ -130,30 +143,30 @@ export const report: Command = {
   name: 'report',
   definition: {
     name: 'report',
-    description: 'Fetch Lighthouse report views',
+    description: 'Operator report for all tracked sites or one selected site',
     type: 1,
     options: [
       {
-        name: 'view',
-        description: 'Report view',
-        type: 3,
-        required: false,
-        choices: [
-          { name: 'legacy', value: 'legacy' },
-          { name: 'fleet', value: 'fleet' },
-          { name: 'site', value: 'site' },
-          { name: 'source_health', value: 'source_health' },
-        ],
-      },
-      {
         name: 'site',
-        description: 'Site key for site view',
+        description: 'Optional site key for detailed single-site report',
         type: 3,
         required: false,
         choices: [
           { name: 'buscore', value: 'buscore' },
           { name: 'tgc_site', value: 'tgc_site' },
           { name: 'star_map_generator', value: 'star_map_generator' },
+        ],
+      },
+      {
+        name: 'view',
+        description: 'Advanced compatibility view override',
+        type: 3,
+        required: false,
+        choices: [
+          { name: 'fleet', value: 'fleet' },
+          { name: 'legacy', value: 'legacy' },
+          { name: 'source_health', value: 'source_health' },
+          { name: 'site (requires site)', value: 'site' },
         ],
       },
     ],

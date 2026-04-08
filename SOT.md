@@ -2,19 +2,21 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.8.0 — In-repo slash command schema registration)
+## Current Mission (v0.8.1 — Operator-first /report surface)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
 
 `/report` consumes Lighthouse `/report` as the only source of truth. Smith is read-only and does not compose Lighthouse-side telemetry locally.
 
-`LIGHTHOUSE_REPORT_URL` is treated as a single base endpoint. Smith appends query parameters at request time for supported views:
-- Legacy: `GET /report` (bare `/report` and `view=legacy`)
-- Fleet: `GET /report?view=fleet`
-- Site: `GET /report?view=site&site_key=<site_key>`
-- Source health: `GET /report?view=source_health`
+`LIGHTHOUSE_REPORT_URL` is treated as a single base endpoint. Smith appends query parameters at request time with an operator-first route policy:
+- Default all-sites operator path: bare `/report` → `GET /report?view=fleet`
+- Default one-site operator path: `/report site:<site_key>` → `GET /report?view=site&site_key=<site_key>`
+- Compatibility path: `/report view:legacy` → legacy `GET /report`
+- Advanced compatibility views remain available: `view=fleet`, `view=site`, `view=source_health`
 
 Typed payload handling is explicit for all four response families. Nulls are preserved until formatting and rendered as unavailable, never silently coerced to zero. Known Lighthouse 400 payloads (`invalid_view`, `missing_site_key`, `invalid_site_key`) map to deterministic operator-facing errors. Report handling remains deterministic-only and non-model-driven.
+
+`accepted_signal_7d` is treated as numeric count telemetry in fleet/site/source-health payload families. Boolean coercion is not applied. Output avoids low-value noise such as unavailable signal-state fields in operator-facing sections.
 
 Slash command schema is defined in repository code (`src/commands/*.ts`) and registered to Discord from `scripts/register-commands.ts`. Deployment now performs command registration automatically after successful Worker deploy, preventing runtime/schema drift.
 
@@ -57,7 +59,7 @@ This is a full rewrite path, not a preservation path for the previous Python imp
 | Command    | Status   | Backend                  | Description                      |
 | :--------- | :------- | :----------------------- | :------------------------------- |
 | `/health`  | Live     | None (static)            | Confirms Worker + DO operational |
-| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Deterministic Lighthouse report consumer (`legacy`, `fleet`, `site`, `source_health`) |
+| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Operator-first deterministic report (`/report` all-sites, `/report site:<site_key>` one-site; advanced compatibility views supported) |
 
 See `CONTRACTS.md` for detailed command contracts.
 

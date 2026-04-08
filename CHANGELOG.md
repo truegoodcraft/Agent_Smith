@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.8.1] — 2026-04-08
+
+### Changed
+
+*   **`/report` is now operator-first by default**: Bare `/report` now routes to Lighthouse `view=fleet` and returns the all-sites operational report. `/report site:<site_key>` now routes directly to Lighthouse `view=site&site_key=<site_key>` and is the primary one-site path.
+*   **Command surface simplified while preserving compatibility**: `site` is now the primary operator option; `view` remains available as an advanced compatibility override (`fleet`, `legacy`, `source_health`, `site`).
+*   **Fleet and site presentation reshaped to BUS Core-style operational flow**: All-sites output now uses `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`. Site output now uses `Report · <Site Label> · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, and `Read`.
+*   **Source-health noise reduced**: Unavailable `has_recent_signal` fields are no longer rendered as low-value operator noise.
+*   **`accepted_signal_7d` semantics tightened**: Smith now treats `accepted_signal_7d` as numeric count telemetry in fleet/site/source-health payload families; boolean values are sanitized as unavailable.
+
+### Added
+
+*   **Contract tests for simplified operator paths**: Added tests for bare `/report` all-sites behavior and `/report site:buscore|tgc_site|star_map_generator` routing/output behavior.
+*   **Output integrity tests**: Added tests for numeric `accepted_signal_7d`, unavailable-not-zero rendering, and reduced source-health signal-state noise in primary operator paths.
+
 ## [0.8.0] — 2026-04-08
 
 ### Added

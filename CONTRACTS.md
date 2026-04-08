@@ -13,33 +13,33 @@ Returns a static health check confirming the Worker and Durable Object are opera
   - The message content must be the static string: `Smith operational. Worker and Durable Object responding.`
 
 ### `/report`
-Fetches Lighthouse report views from `LIGHTHOUSE_REPORT_URL`.
+Operator-first deterministic report for all tracked sites or one selected site from `LIGHTHOUSE_REPORT_URL`.
 
 - **Request Shape**: `APIApplicationCommandInteraction`
 - **Output Shape**: `InteractionResponse` with `ChannelMessageWithSource`.
 - **Supported options**:
-  - `view` (optional): `legacy`, `fleet`, `site`, `source_health`
-  - `site` (optional): `buscore`, `tgc_site`, `star_map_generator`
-- **Route behavior**:
-  - Bare `/report` uses the legacy Lighthouse contract (`GET /report`).
-  - `/report view:legacy` also uses the legacy Lighthouse contract.
-  - `/report view:fleet` requests `GET /report?view=fleet`.
-  - `/report view:site site:<site_key>` requests `GET /report?view=site&site_key=<site_key>`.
-  - `/report view:source_health` requests `GET /report?view=source_health`.
-  - If `view=site` and no site is supplied, Smith returns deterministic operator error text and does not call any model path.
-  - If `view=fleet` or `view=source_health` and a site is supplied, the site value is ignored.
+  - `site` (optional primary path): `buscore`, `tgc_site`, `star_map_generator`
+  - `view` (optional compatibility/advanced override): `fleet`, `legacy`, `source_health`, `site`
+- **Route behavior (operator-first)**:
+  - Bare `/report` requests `GET /report?view=fleet` and returns all-site operator report output.
+  - `/report site:<site_key>` requests `GET /report?view=site&site_key=<site_key>` and returns one-site operator output.
+  - If both `site` and `view` are supplied, `site` takes precedence and Smith routes to site view.
+  - `/report view:legacy` requests legacy `GET /report` for compatibility.
+  - `/report view:source_health` requests `GET /report?view=source_health` for advanced telemetry-integrity diagnostics.
+  - `/report view:site` without a site returns deterministic operator error text.
 - **Consumed Lighthouse payload families**:
   - Legacy (`GET /report`): core windows, optional traffic, optional human traffic, optional identity.
   - Fleet (`view=fleet`): `view`, `generated_at`, `sites[]` with per-site metrics and signal health fields.
   - Site (`view=site`): `view`, `generated_at`, `scope`, `summary`, `traffic`, `events`, `health`.
   - Source health (`view=source_health`): `view`, `generated_at`, `sites[]` focused on telemetry integrity fields.
 - **Deterministic output expectations**:
-  - Legacy formatting remains the structured `Summary`/`Today`/`Traffic`/optional `Human Traffic`/optional `Observability`/optional `Identity`/`Read` output.
-  - Fleet formatting is compact per-site and includes label, `site_key`, backend source (if present), recent signal, last received timestamp, and key 7d metrics.
-  - Site formatting is sectioned into `Scope`, `Summary`, `Traffic`, `Events`, and `Health`.
-  - Source health formatting reports telemetry integrity values only.
+  - Fleet/all-sites formatting is sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`.
+  - Site formatting follows BUS Core-style operator flow: `Report · <Site Label> · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Read`.
+  - Optional `Identity` is rendered only when present in payload shape.
+  - Source health formatting reports telemetry integrity values only and avoids noisy unavailable signal-state fields.
   - `null` values must render as unavailable and must not be coerced to `0`.
-  - `accepted_signal_7d` is preserved as returned (`number`, `boolean`, or `null`), without coercion.
+  - `accepted_signal_7d` is treated as a numeric count and rendered accordingly.
+  - Unavailable signal-state fields must not be rendered as misleading operator noise.
   - `/report` remains deterministic and non-model-driven for all views.
 - **Lighthouse error payload handling**:
   - `400 {"ok":false,"error":"invalid_view"}` → deterministic ephemeral operator error.

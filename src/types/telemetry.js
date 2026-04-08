@@ -86,9 +86,6 @@ function isReportHumanTraffic(data) {
         isReportHumanLast7Days(data.last_7_days) &&
         isReportHumanObservability(data.observability));
 }
-function isNullableNumberBoolean(data) {
-    return typeof data === 'number' || typeof data === 'boolean' || data === null;
-}
 function normalizeIdentityWindow(data) {
     if (!isRecord(data)) {
         return undefined;
@@ -203,7 +200,7 @@ function normalizeFleetSite(data) {
         pageviews_7d: isNullableNumber(data.pageviews_7d) ? data.pageviews_7d : undefined,
         requests_7d: isNullableNumber(data.requests_7d) ? data.requests_7d : undefined,
         visits_7d: isNullableNumber(data.visits_7d) ? data.visits_7d : undefined,
-        accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+        accepted_signal_7d: isNullableNumber(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
         has_recent_signal: typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
             ? data.has_recent_signal
             : undefined,
@@ -217,7 +214,7 @@ function normalizeSourceHealthSite(data) {
     return {
         site_key: data.site_key,
         label: isNullableString(data.label) ? data.label : undefined,
-        accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+        accepted_signal_7d: isNullableNumber(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
         has_recent_signal: typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
             ? data.has_recent_signal
             : undefined,
@@ -307,7 +304,7 @@ function normalizeSiteReportEvents(data) {
         return null;
     }
     return {
-        accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+        accepted_signal_7d: isNullableNumber(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
         has_recent_signal: typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
             ? data.has_recent_signal
             : undefined,

@@ -9,21 +9,25 @@ Lighthouse is the reporting authority. Smith is a read-only consumer and operato
 | Command    | Description                                    |
 | :--------- | :--------------------------------------------- |
 | `/health`  | Confirms Worker + Durable Object are running   |
-| `/report`  | Lighthouse report consumer: `legacy`, `fleet`, `site`, `source_health` |
+| `/report`  | Operator report for all tracked sites or one selected site |
 
 `/traffic` and `/errors` are planned but not yet implemented.
 
-`/report` supports these operator paths:
+`/report` primary operator paths:
 
-- `/report` (legacy-compatible)
+- `/report` (all tracked sites)
+- `/report site:buscore`
+- `/report site:tgc_site`
+- `/report site:star_map_generator`
+
+Advanced compatibility path (secondary):
+
 - `/report view:legacy`
 - `/report view:fleet`
-- `/report view:site site:buscore`
-- `/report view:site site:tgc_site`
-- `/report view:site site:star_map_generator`
 - `/report view:source_health`
+- `/report view:site site:<site_key>`
 
-Legacy output remains deterministic `Summary`, `Today`, `Traffic`, and `Read` sections (plus optional human/identity sections). Fleet, site, and source-health outputs are deterministic and view-specific. Nulls are rendered as unavailable and are not rewritten to zero.
+All-sites output is deterministic and sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`. One-site output follows BUS Core-style section flow (`Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Read`) while preserving Lighthouse authority and null semantics. Nulls are rendered as unavailable and are not rewritten to zero.
 
 See [CONTRACTS.md](CONTRACTS.md) for exact output shapes.
 

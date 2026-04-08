@@ -227,29 +227,37 @@ function getHumanTrafficRead(humanTraffic, selected, windowLabel) {
     return [humanSignalLine, engagementLine].filter(Boolean).join(' ');
 }
 function formatFleetSiteLine(site) {
-    const label = site.label || 'unlabeled';
-    return [
-        `- ${label} (${site.site_key})`,
-        `source=${formatNullableValue(site.backend_source)}`,
-        `recent_signal=${formatNullableValue(site.has_recent_signal)}`,
-        `last_received=${formatNullableValue(site.last_received_at)}`,
-        `accepted_7d=${formatNullableValue(site.accepted_signal_7d)}`,
-        `pageviews_7d=${formatNullableValue(site.pageviews_7d)}`,
-        `requests_7d=${formatNullableValue(site.requests_7d)}`,
-        `visits_7d=${formatNullableValue(site.visits_7d)}`,
-    ].join(' | ');
+    const label = site.label || site.site_key;
+    const trafficBits = [
+        `requests ${formatNullableValue(site.requests_7d)}`,
+        `visits ${formatNullableValue(site.visits_7d)}`,
+        `pageviews ${formatNullableValue(site.pageviews_7d)}`,
+    ].join(' · ');
+    const summaryLines = [
+        `**${label}**`,
+        `- Key: ${site.site_key}`,
+        `- Traffic 7d: ${trafficBits}`,
+        `- Accepted signal 7d: ${formatNullableValue(site.accepted_signal_7d)}`,
+        `- Last signal received: ${formatNullableValue(site.last_received_at)}`,
+    ];
+    if (typeof site.has_recent_signal === 'boolean') {
+        summaryLines.push(`- Signal state: ${site.has_recent_signal ? 'recent' : 'stale'}`);
+    }
+    return summaryLines.join('\n');
 }
 function formatSourceHealthSiteLine(site) {
-    const label = site.label || 'unlabeled';
-    return [
+    const label = site.label || site.site_key;
+    const lines = [
         `- ${label} (${site.site_key})`,
-        `accepted_signal_7d=${formatNullableValue(site.accepted_signal_7d)}`,
-        `has_recent_signal=${formatNullableValue(site.has_recent_signal)}`,
-        `last_received=${formatNullableValue(site.last_received_at)}`,
-        `dropped_invalid=${formatNullableValue(site.dropped_invalid)}`,
-        `dropped_rate_limited=${formatNullableValue(site.dropped_rate_limited)}`,
-        `traffic_enabled=${formatNullableValue(site.cloudflare_traffic_enabled)}`,
-    ].join(' | ');
+        `  accepted_signal_7d=${formatNullableValue(site.accepted_signal_7d)}`,
+        `  last_received=${formatNullableValue(site.last_received_at)}`,
+        `  dropped_invalid=${formatNullableValue(site.dropped_invalid)}`,
+        `  dropped_rate_limited=${formatNullableValue(site.dropped_rate_limited)}`,
+    ];
+    if (typeof site.has_recent_signal === 'boolean') {
+        lines.push(`  has_recent_signal=${site.has_recent_signal}`);
+    }
+    return lines.join('\n');
 }
 function formatLegacyReport(report) {
     const statusLine = report.windowLabel === '7d' ? 'Report · OK · 7d' : 'Report · OK · today';
@@ -285,15 +293,53 @@ function formatLegacyReport(report) {
 }
 function formatFleetReport(report) {
     const siteLines = report.sites.length > 0
-        ? report.sites.map((site) => formatFleetSiteLine(site)).join('\n')
+        ? report.sites.map((site) => formatFleetSiteLine(site)).join('\n\n')
         : '- none';
+    const recentSignalCount = report.sites.filter((site) => site.has_recent_signal === true).length;
+    const staleSignalCount = report.sites.filter((site) => site.has_recent_signal === false).length;
+    const unknownSignalCount = report.sites.filter((site) => typeof site.has_recent_signal !== 'boolean').length;
+    const acceptedSignalValues = report.sites
+        .map((site) => site.accepted_signal_7d)
+        .filter((value) => typeof value === 'number');
+    const totalAcceptedSignal = acceptedSignalValues.length > 0
+        ? acceptedSignalValues.reduce((sum, value) => sum + value, 0)
+        : null;
+    const readLines = [];
+    if (report.sites.length === 0) {
+        readLines.push('No tracked sites were returned by Lighthouse.');
+    }
+    else {
+        readLines.push(`${report.sites.length} tracked sites reported for the 7-day window.`);
+        if (staleSignalCount > 0) {
+            readLines.push(`${staleSignalCount} site(s) have stale signal state and may require telemetry checks.`);
+        }
+        if (typeof totalAcceptedSignal === 'number') {
+            if (totalAcceptedSignal > 0) {
+                readLines.push(`Accepted signal volume is active across the fleet (${totalAcceptedSignal} in 7d).`);
+            }
+            else {
+                readLines.push('Accepted signal count is zero across reported sites in 7d.');
+            }
+        }
+        else {
+            readLines.push('Accepted signal totals are unavailable for all reported sites.');
+        }
+    }
     return [
-        '**Report · Fleet**',
+        '**Report · OK · 7d**',
         `- Generated at: ${formatNullableValue(report.generated_at)}`,
-        `- Sites: ${report.sites.length}`,
         '',
-        '**Fleet Overview**',
+        '**Sites Summary**',
         siteLines,
+        '',
+        '**Observability**',
+        `- Sites with recent signal: ${recentSignalCount}`,
+        `- Sites with stale signal: ${staleSignalCount}`,
+        `- Sites with unknown signal state: ${unknownSignalCount}`,
+        `- Accepted signal 7d total: ${formatNullableValue(totalAcceptedSignal)}`,
+        '',
+        '**Read**',
+        ...readLines.map((line) => `- ${line}`),
     ].join('\n');
 }
 function formatSiteSection(title, section) {
@@ -309,19 +355,93 @@ function formatSiteSection(title, section) {
     return [`**${title}**`, ...lines].join('\n');
 }
 function formatSiteReport(report) {
+    const siteLabel = report.scope?.label || report.scope?.site_key || 'Site';
+    const today = report.traffic?.latest_day;
+    const todayHasData = Boolean(today &&
+        (today.day !== undefined ||
+            today.captured_at !== undefined ||
+            today.requests !== undefined ||
+            today.visits !== undefined));
+    const todaySection = todayHasData
+        ? [
+            '**Today**',
+            `- Day: ${formatNullableValue(today?.day)}`,
+            `- Captured at: ${formatNullableValue(today?.captured_at)}`,
+            `- Requests: ${formatNullableValue(today?.requests)}`,
+            `- Visits: ${formatNullableValue(today?.visits)}`,
+        ].join('\n')
+        : ['**Today**', '- unavailable'].join('\n');
+    const eventsLines = [
+        '**Human Traffic / Events**',
+        `- Accepted signal 7d: ${formatNullableValue(report.events?.accepted_signal_7d)}`,
+        `- Last signal received: ${formatNullableValue(report.events?.last_received_at)}`,
+    ];
+    if (typeof report.events?.has_recent_signal === 'boolean') {
+        eventsLines.push(`- Signal state: ${report.events.has_recent_signal ? 'recent' : 'stale'}`);
+    }
+    const readLines = [];
+    const requests7d = report.summary?.requests_7d;
+    const pageviews7d = report.summary?.pageviews_7d;
+    const acceptedSignal7d = report.events?.accepted_signal_7d;
+    const droppedInvalid = report.health?.dropped_invalid;
+    const droppedRateLimited = report.health?.dropped_rate_limited;
+    if (typeof requests7d === 'number' &&
+        requests7d > 0) {
+        readLines.push('Traffic activity is present in the 7-day window.');
+    }
+    else if (requests7d === 0) {
+        readLines.push('No request traffic recorded for the 7-day window.');
+    }
+    else if (typeof pageviews7d === 'number' && pageviews7d > 0) {
+        readLines.push('Pageview signal is present in the 7-day window.');
+    }
+    else {
+        readLines.push('Traffic signal is unavailable or not yet present for this site.');
+    }
+    if (typeof acceptedSignal7d === 'number') {
+        if (acceptedSignal7d > 0) {
+            readLines.push(`Events signal is active (${acceptedSignal7d} accepted in 7d).`);
+        }
+        else {
+            readLines.push('Events signal is present but currently zero in 7d.');
+        }
+    }
+    if ((typeof droppedInvalid === 'number' && droppedInvalid > 0) ||
+        (typeof droppedRateLimited === 'number' && droppedRateLimited > 0)) {
+        readLines.push('Dropped telemetry is present and should be reviewed in observability metrics.');
+    }
+    if (readLines.length === 0) {
+        readLines.push('No meaningful operator signals are available for this site yet.');
+    }
     return [
-        '**Report · Site**',
+        `**Report · ${siteLabel} · 7d**`,
         `- Generated at: ${formatNullableValue(report.generated_at)}`,
         '',
-        formatSiteSection('Scope', report.scope),
+        '**Summary**',
+        `- Site key: ${formatNullableValue(report.scope?.site_key)}`,
+        `- Backend source: ${formatNullableValue(report.scope?.backend_source)}`,
+        `- Cloudflare traffic enabled: ${formatNullableValue(report.scope?.cloudflare_traffic_enabled)}`,
+        `- Requests 7d: ${formatNullableValue(report.summary?.requests_7d)}`,
+        `- Visits 7d: ${formatNullableValue(report.summary?.visits_7d)}`,
+        `- Pageviews 7d: ${formatNullableValue(report.summary?.pageviews_7d)}`,
         '',
-        formatSiteSection('Summary', report.summary),
+        todaySection,
         '',
-        formatSiteSection('Traffic', report.traffic),
+        '**Traffic**',
+        `- Requests 7d: ${formatNullableValue(report.traffic?.last_7_days?.requests)}`,
+        `- Visits 7d: ${formatNullableValue(report.traffic?.last_7_days?.visits)}`,
+        `- Avg daily requests: ${formatNullableValue(report.traffic?.last_7_days?.avg_daily_requests)}`,
+        `- Avg daily visits: ${formatNullableValue(report.traffic?.last_7_days?.avg_daily_visits)}`,
+        `- Days with data: ${formatNullableValue(report.traffic?.last_7_days?.days_with_data)}`,
         '',
-        formatSiteSection('Events', report.events),
+        eventsLines.join('\n'),
         '',
-        formatSiteSection('Health', report.health),
+        '**Observability**',
+        `- Dropped invalid: ${formatNullableValue(report.health?.dropped_invalid)}`,
+        `- Dropped rate limited: ${formatNullableValue(report.health?.dropped_rate_limited)}`,
+        '',
+        '**Read**',
+        ...readLines.map((line) => `- ${line}`),
     ].join('\n');
 }
 function formatSourceHealthReport(report) {

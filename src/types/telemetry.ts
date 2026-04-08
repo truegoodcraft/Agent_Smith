@@ -122,7 +122,7 @@ export interface FleetReportSite {
   pageviews_7d?: number | null;
   requests_7d?: number | null;
   visits_7d?: number | null;
-  accepted_signal_7d?: number | boolean | null;
+  accepted_signal_7d?: number | null;
   has_recent_signal?: boolean | null;
   last_received_at?: string | null;
 }
@@ -163,7 +163,7 @@ export interface SiteReportTraffic {
 }
 
 export interface SiteReportEvents {
-  accepted_signal_7d?: number | boolean | null;
+  accepted_signal_7d?: number | null;
   has_recent_signal?: boolean | null;
   last_received_at?: string | null;
 }
@@ -186,7 +186,7 @@ export interface SiteLighthouseReport {
 export interface SourceHealthSite {
   site_key: string;
   label?: string | null;
-  accepted_signal_7d?: number | boolean | null;
+  accepted_signal_7d?: number | null;
   has_recent_signal?: boolean | null;
   last_received_at?: string | null;
   dropped_invalid?: number | null;
@@ -340,10 +340,6 @@ function isReportHumanTraffic(data: unknown): data is ReportHumanTraffic {
   );
 }
 
-function isNullableNumberBoolean(data: unknown): data is number | boolean | null {
-  return typeof data === 'number' || typeof data === 'boolean' || data === null;
-}
-
 function normalizeIdentityWindow(data: unknown): ReportIdentityWindow | undefined {
   if (!isRecord(data)) {
     return undefined;
@@ -472,7 +468,7 @@ function normalizeFleetSite(data: unknown): FleetReportSite | null {
     pageviews_7d: isNullableNumber(data.pageviews_7d) ? data.pageviews_7d : undefined,
     requests_7d: isNullableNumber(data.requests_7d) ? data.requests_7d : undefined,
     visits_7d: isNullableNumber(data.visits_7d) ? data.visits_7d : undefined,
-    accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+    accepted_signal_7d: isNullableNumber(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
     has_recent_signal:
       typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
         ? data.has_recent_signal
@@ -489,7 +485,7 @@ function normalizeSourceHealthSite(data: unknown): SourceHealthSite | null {
   return {
     site_key: data.site_key,
     label: isNullableString(data.label) ? data.label : undefined,
-    accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+    accepted_signal_7d: isNullableNumber(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
     has_recent_signal:
       typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
         ? data.has_recent_signal
@@ -592,7 +588,7 @@ function normalizeSiteReportEvents(data: unknown): SiteReportEvents | null {
   }
 
   return {
-    accepted_signal_7d: isNullableNumberBoolean(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
+    accepted_signal_7d: isNullableNumber(data.accepted_signal_7d) ? data.accepted_signal_7d : undefined,
     has_recent_signal:
       typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
         ? data.has_recent_signal

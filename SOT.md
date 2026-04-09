@@ -2,9 +2,18 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.8.4 — Lighthouse terminology normalization and language alignment)
+## Current Mission (v0.8.5 — BUS Core legacy-rich site routing correction)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+**[v0.8.5 BUS Core Legacy-Rich Exception]** `/report` remains operator-first with split routing by site key:
+
+- Bare `/report` => all-sites summary via `GET /report?view=fleet`
+- `/report site:buscore` => BUS Core legacy-rich report via bare `GET /report`
+- `/report site:star_map_generator` => normalized one-site report via `GET /report?view=site&site_key=star_map_generator`
+- `/report site:tgc_site` => normalized one-site report via `GET /report?view=site&site_key=tgc_site`
+
+BUS Core is explicitly allowed to remain a legacy-rich exception at the report-consumption layer. Smith does not redesign or flatten BUS Core into the normalized site-view ceiling when the legacy `/report` path provides richer operator fields. Non-BUS Core sites retain normalized site-view handling and null-honesty semantics.
 
 **[v0.8.4 Lighthouse Language Alignment]** Smith documentation and operator language are normalized to Lighthouse canonical terminology. Smith remains read-only and does not define telemetry semantics.
 
@@ -133,7 +142,7 @@ This is a full rewrite path, not a preservation path for the previous Python imp
 | Command    | Status   | Backend                  | Description                      |
 | :--------- | :------- | :----------------------- | :------------------------------- |
 | `/health`  | Live     | None (static)            | Confirms Worker + DO operational |
-| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Operator-first deterministic report (`/report` all-sites, `/report site:<site_key>` one-site; advanced compatibility views supported). Language follows Lighthouse support classes/capability layers and null-honesty semantics. |
+| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Operator-first deterministic report (`/report` all-sites, `/report site:buscore` legacy-rich BUS Core exception, `/report site:tgc_site|star_map_generator` normalized one-site; advanced compatibility views supported). Language follows Lighthouse support classes/capability layers and null-honesty semantics. |
 
 See `CONTRACTS.md` for detailed command contracts.
 

@@ -43,12 +43,22 @@ function toSiteKey(input?: string): SiteKey | undefined {
   return undefined;
 }
 
+function usesLegacyRichSiteRoute(site: SiteKey): boolean {
+  return site === 'buscore';
+}
+
 function parseReportRequest(interaction: APIApplicationCommandInteraction): LighthouseReportRequest {
   const site = toSiteKey(getStringOption(interaction, 'site'));
   const rawView = getStringOption(interaction, 'view');
   const view = toView(rawView);
 
   if (site) {
+    if (usesLegacyRichSiteRoute(site)) {
+      return {
+        view: 'legacy',
+      };
+    }
+
     return {
       view: 'site',
       siteKey: site,

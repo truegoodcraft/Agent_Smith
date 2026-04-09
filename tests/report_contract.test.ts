@@ -451,81 +451,60 @@ test('bare /report preserves alias observability fields from fleet output', asyn
   );
 });
 
-test('report site:buscore preserves alias observability fields from site output', async () => {
-  await withMockFetch(
-    (async () =>
-      new Response(JSON.stringify({
-        view: 'site',
-        generated_at: null,
-        scope: {
-          site_key: 'buscore',
-          label: 'BUS Core',
-          backend_source: 'lighthouse',
-          traffic_enabled: true,
-        },
-        summary: { requests_7d: 22, visits_7d: 21, pageviews_7d: 20 },
-        traffic: null,
-        events: {
-          accepted_events_7d: 49,
-          has_recent_signal: true,
-          last_received: '2026-04-08T19:55:17.273Z',
-        },
-        health: { dropped_invalid: 0, dropped_rate_limited: 0 },
-      })) as Response) as typeof globalThis.fetch,
-    async () => {
-      const payload = await invokeReport([{ name: 'site', value: 'buscore' }]);
-      const content = payload.data && 'content' in payload.data ? payload.data.content : '';
-
-      assert.match(String(content), /Cloudflare traffic enabled: true/);
-      assert.match(String(content), /Accepted signal 7d: 49/);
-      assert.match(String(content), /Last signal received: 2026-04-08T19:55:17.273Z/);
-      assert.doesNotMatch(String(content), /Accepted signal 7d: unavailable/);
-      assert.doesNotMatch(String(content), /Last signal received: unavailable/);
-    },
-  );
-});
-
-test('report site:buscore routes to site view and renders BUS Core style sections', async () => {
+test('report site:buscore uses legacy rich report path', async () => {
   let requestedUrl = '';
   await withMockFetch(
     (async (input) => {
       requestedUrl = String(input);
       return new Response(JSON.stringify({
-        view: 'site',
-        generated_at: null,
-        scope: {
-          site_key: 'buscore',
-          label: 'BUS Core',
-          backend_source: 'lighthouse',
-          cloudflare_traffic_enabled: true,
-        },
-        summary: { requests_7d: 22, visits_7d: 21, pageviews_7d: 20 },
+        today: { update_checks: 6, downloads: 4, errors: 0 },
+        last_7_days: { update_checks: 30, downloads: 14, errors: 1 },
         traffic: {
-          latest_day: { day: '2026-04-07', requests: 4, visits: 3, captured_at: '2026-04-08T00:00:00Z' },
-          last_7_days: { requests: 22, visits: 21, avg_daily_requests: 3, avg_daily_visits: 3, days_with_data: 7 },
+          latest_day: { day: '2026-04-07', requests: 20, visits: 12, captured_at: '2026-04-08T00:00:00Z' },
+          last_7_days: { requests: 120, visits: 70, avg_daily_requests: 17, avg_daily_visits: 10, days_with_data: 7 },
         },
-        events: { accepted_signal_7d: 12, has_recent_signal: true, last_received_at: '2026-04-08T00:00:00Z' },
-        health: { dropped_invalid: 0, dropped_rate_limited: 0 },
+        human_traffic: {
+          today: { pageviews: 9, last_received_at: '2026-04-08T00:00:00Z' },
+          last_7_days: {
+            pageviews: 55,
+            days_with_data: 7,
+            top_paths: [{ path: '/downloads', pageviews: 20 }],
+            top_referrers: [{ referrer_domain: 'google.com', pageviews: 10 }],
+            top_sources: [{ source: 'search', pageviews: 18 }],
+          },
+          observability: {
+            accepted: 49,
+            dropped_rate_limited: 0,
+            dropped_invalid: 1,
+            last_received_at: '2026-04-08T00:00:00Z',
+          },
+        },
+        identity: {
+          today: { new_users: 2, returning_users: 1, sessions: 4 },
+          last_7_days: { new_users: 7, returning_users: 3, sessions: 12, return_rate: 0.3 },
+          top_sources_by_returning_users: [{ source: 'search', users: 2 }],
+        },
       })) as Response;
     }) as typeof globalThis.fetch,
     async () => {
       const payload = await invokeReport([{ name: 'site', value: 'buscore' }]);
       const content = payload.data && 'content' in payload.data ? payload.data.content : '';
 
-      assert.match(requestedUrl, /view=site/);
-      assert.match(requestedUrl, /site_key=buscore/);
-      assert.match(String(content), /\*\*Report · BUS Core · 7d\*\*/);
+      assert.doesNotMatch(requestedUrl, /view=/);
+      assert.doesNotMatch(requestedUrl, /site_key=/);
+      assert.match(String(content), /\*\*Report · OK · 7d\*\*/);
       assert.match(String(content), /\*\*Summary\*\*/);
       assert.match(String(content), /\*\*Today\*\*/);
       assert.match(String(content), /\*\*Traffic\*\*/);
-      assert.match(String(content), /\*\*Human Traffic \/ Events\*\*/);
+      assert.match(String(content), /\*\*Human Traffic\*\*/);
       assert.match(String(content), /\*\*Observability\*\*/);
+      assert.match(String(content), /\*\*Identity\*\*/);
       assert.match(String(content), /\*\*Read\*\*/);
     },
   );
 });
 
-test('report site:tgc_site routes to site view', async () => {
+test('report site:tgc_site uses normalized site view', async () => {
   let requestedUrl = '';
   await withMockFetch(
     (async (input) => {
@@ -549,13 +528,15 @@ test('report site:tgc_site routes to site view', async () => {
       const payload = await invokeReport([{ name: 'site', value: 'tgc_site' }]);
       const content = payload.data && 'content' in payload.data ? payload.data.content : '';
 
+      assert.match(requestedUrl, /view=site/);
       assert.match(requestedUrl, /site_key=tgc_site/);
       assert.match(String(content), /Report · TGC Site · 7d/);
+      assert.match(String(content), /\*\*Human Traffic \/ Events\*\*/);
     },
   );
 });
 
-test('report site:star_map_generator routes to site view', async () => {
+test('report site:star_map_generator uses normalized site view', async () => {
   let requestedUrl = '';
   await withMockFetch(
     (async (input) => {
@@ -582,8 +563,10 @@ test('report site:star_map_generator routes to site view', async () => {
       const payload = await invokeReport([{ name: 'site', value: 'star_map_generator' }]);
       const content = payload.data && 'content' in payload.data ? payload.data.content : '';
 
+      assert.match(requestedUrl, /view=site/);
       assert.match(requestedUrl, /site_key=star_map_generator/);
       assert.match(String(content), /Report · Star Map Generator · 7d/);
+      assert.match(String(content), /\*\*Human Traffic \/ Events\*\*/);
     },
   );
 });

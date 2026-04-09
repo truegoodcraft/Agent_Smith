@@ -43,8 +43,10 @@ Operator-first deterministic report for all tracked sites or one selected site f
   - `view` (optional compatibility/advanced override): `fleet`, `legacy`, `source_health`, `site`
 - **Route behavior (operator-first)**:
   - Bare `/report` requests `GET /report?view=fleet` and returns all-site operator report output.
-  - `/report site:<site_key>` requests `GET /report?view=site&site_key=<site_key>` and returns one-site operator output.
-  - If both `site` and `view` are supplied, `site` takes precedence and Smith routes to site view.
+  - `/report site:buscore` requests legacy `GET /report` and returns the richer BUS Core legacy report output.
+  - `/report site:star_map_generator` requests `GET /report?view=site&site_key=star_map_generator` and returns normalized one-site output.
+  - `/report site:tgc_site` requests `GET /report?view=site&site_key=tgc_site` and returns normalized one-site output.
+  - If both `site` and `view` are supplied, `site` takes precedence and Smith uses the operator-first site routing above.
   - `/report view:legacy` requests legacy `GET /report` for compatibility.
   - `/report view:source_health` requests `GET /report?view=source_health` for advanced telemetry-integrity diagnostics.
   - `/report view:site` without a site returns deterministic operator error text.
@@ -59,6 +61,7 @@ Operator-first deterministic report for all tracked sites or one selected site f
     - Traffic enabled flag: `cloudflare_traffic_enabled` or `traffic_enabled`
 - **Deterministic output expectations**:
   - Fleet/all-sites formatting is sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`.
+  - `site:buscore` is a permitted legacy-rich exception at the report-consumption layer and uses legacy section flow: `Report · OK · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic`, `Observability`, `Identity`, `Read` (`Identity` is optional).
   - Site formatting follows canonical normalized per-site flow: `Report · <Site Label> · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Identity`, `Read` (`Identity` is optional).
   - Section naming and content do not imply telemetry parity between support classes.
   - Source health formatting reports telemetry integrity values only and avoids noisy unavailable signal-state fields.

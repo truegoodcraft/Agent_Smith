@@ -28,11 +28,19 @@ function toSiteKey(input) {
     }
     return undefined;
 }
+function usesLegacyRichSiteRoute(site) {
+    return site === 'buscore';
+}
 function parseReportRequest(interaction) {
     const site = toSiteKey(getStringOption(interaction, 'site'));
     const rawView = getStringOption(interaction, 'view');
     const view = toView(rawView);
     if (site) {
+        if (usesLegacyRichSiteRoute(site)) {
+            return {
+                view: 'legacy',
+            };
+        }
         return {
             view: 'site',
             siteKey: site,

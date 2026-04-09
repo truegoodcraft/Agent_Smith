@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.5] — 2026-04-08
+
+### Fixed
+
+*   **BUS Core site report now preserves the richer legacy Lighthouse path**: `/report site:buscore` now routes to bare Lighthouse `/report` instead of normalized `view=site`, restoring the richer BUS Core operator sections (`Summary`, `Today`, `Traffic`, `Human Traffic`, `Observability`, `Identity`, `Read`) without changing Lighthouse.
+*   **Normalized site routing retained for non-BUS Core sites**: `/report site:star_map_generator` and `/report site:tgc_site` continue to use normalized `view=site&site_key=<site_key>` handling with null-honest rendering.
+*   **All-sites operator path preserved**: Bare `/report` continues to request `view=fleet` and return the all-sites summary.
+
+### Added
+
+*   **Routing regression tests for BUS Core exception behavior**: Added contract coverage proving `site:buscore` uses the legacy path while `site:star_map_generator`, `site:tgc_site`, and bare `/report` keep their intended operator routes.
+
 ## [0.8.4] — 2026-04-08
 
 ### Changed

@@ -31,6 +31,8 @@ Advanced compatibility path (secondary):
 
 All-sites output is deterministic and sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`. One-site output follows the canonical normalized per-site section flow (`Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Identity`, `Read`; `Identity` remains optional). Nulls are rendered as unavailable and are not rewritten to zero.
 
+BUS Core remains the allowed legacy-rich exception at the report-consumption layer: `/report site:buscore` uses Lighthouse legacy `/report`, while `/report site:tgc_site` and `/report site:star_map_generator` stay on the normalized site-view path with null-honest rendering.
+
 ## Lighthouse Terminology Alignment
 
 Smith operator language aligns to Lighthouse canonical terminology:

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.4] — 2026-04-08
+
+### Changed
+
+*   **Lighthouse terminology normalization across Smith docs/contracts**: Updated language in `README.md`, `CONTRACTS.md`, and `SOT.md` to use canonical Lighthouse terms for support classes, capability layers, shared comparable events, and field-meaning freeze.
+*   **Operator wording now emphasizes capability-layer differences over parity assumptions**: Documentation now explicitly states that normalization does not mean equal telemetry richness and that unsupported metrics remain null/omitted by contract.
+*   **Telemetry authority boundary language hardened**: Smith docs now consistently define Lighthouse as telemetry/normalization authority and Smith as a read-only deterministic consumer.
+*   **Canonical source-layer distinction documented**: Added explicit wording that Cloudflare traffic, first-party standardized events, and BUS Core legacy pageviews are distinct, non-equivalent layers.
+*   **Per-site section naming aligned in operator output wording**: Site report operator heading is now `Human Traffic / Events` to match canonical normalized per-site contract language.
+*   **Glossary and operator request examples added**: Added compact terminology glossary and "How to ask for telemetry changes" examples using capability-layer language.
+
 ## [0.8.3] — 2026-04-08
 
 ### Fixed

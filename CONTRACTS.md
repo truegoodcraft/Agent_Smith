@@ -2,6 +2,27 @@
 
 This document defines the canonical input/output contracts for Agent Smith's active slash commands. All deterministic logic must adhere to these shapes.
 
+Telemetry authority is Lighthouse. Smith is a read-only consumer and deterministic operator formatter.
+
+## Canonical Terminology
+
+Smith contract language uses Lighthouse canonical terms:
+
+- Support classes: `legacy_hybrid`, `event_only`, `event_plus_cf_traffic`, `not_yet_normalized`
+- Capability layers: `Layer 1 Registry`, `Layer 2 Event`, `Layer 3 Traffic`, `Layer 4 Identity`, `Layer 5 Extension`
+- Comparable shared events: `page_view`, `outbound_click`, `contact_click`, `service_interest`
+- Field meaning freeze: `accepted_signal_7d`, `accepted_events_7d`, `has_recent_signal`, `last_received_at`, `cloudflare_traffic_enabled`
+
+Normalization language constraints:
+
+- `TRACKED_SITES` is the canonical property registry.
+- `/metrics/event` is the canonical fleet telemetry path.
+- `/metrics/pageview` is BUS Core legacy-only support.
+- `dev_mode` is the canonical cross-site developer/operator suppression contract.
+- Normalization does not imply equal telemetry richness across sites.
+- Unsupported sections/metrics remain null or are omitted by documented rule.
+- Cloudflare traffic, first-party standardized events, and BUS Core legacy pageviews are distinct source layers.
+
 ## Active Commands
 
 ### `/health`
@@ -38,8 +59,8 @@ Operator-first deterministic report for all tracked sites or one selected site f
     - Traffic enabled flag: `cloudflare_traffic_enabled` or `traffic_enabled`
 - **Deterministic output expectations**:
   - Fleet/all-sites formatting is sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`.
-  - Site formatting follows BUS Core-style operator flow: `Report · <Site Label> · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Read`.
-  - Optional `Identity` is rendered only when present in payload shape.
+  - Site formatting follows canonical normalized per-site flow: `Report · <Site Label> · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Identity`, `Read` (`Identity` is optional).
+  - Section naming and content do not imply telemetry parity between support classes.
   - Source health formatting reports telemetry integrity values only and avoids noisy unavailable signal-state fields.
   - `null` values must render as unavailable and must not be coerced to `0`.
   - `accepted_signal_7d` is treated as a numeric count and rendered accordingly.

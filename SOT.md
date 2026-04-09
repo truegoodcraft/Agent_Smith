@@ -2,9 +2,35 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.8.3 — Site payload expansion and contract alignment)
+## Current Mission (v0.8.4 — Lighthouse terminology normalization and language alignment)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+**[v0.8.4 Lighthouse Language Alignment]** Smith documentation and operator language are normalized to Lighthouse canonical terminology. Smith remains read-only and does not define telemetry semantics.
+
+Canonical terminology now used across Smith docs/contracts/operator wording:
+
+- Support classes: `legacy_hybrid`, `event_only`, `event_plus_cf_traffic`, `not_yet_normalized`
+- Capability layers: `Layer 1 Registry`, `Layer 2 Event`, `Layer 3 Traffic`, `Layer 4 Identity`, `Layer 5 Extension`
+- Shared comparable event names: `page_view`, `outbound_click`, `contact_click`, `service_interest`
+- Shared field meaning freeze: `accepted_signal_7d`, `accepted_events_7d`, `has_recent_signal`, `last_received_at`, `cloudflare_traffic_enabled`
+- Canonical normalized per-site report sections: `Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Identity`, `Read`
+
+Normalization rules reflected in Smith language:
+
+- `TRACKED_SITES` is the canonical property registry.
+- `/metrics/event` is the canonical fleet telemetry path.
+- `/metrics/pageview` is BUS Core legacy-only support.
+- `dev_mode` is the canonical cross-site developer/operator suppression contract.
+- Normalization does not imply equal telemetry richness.
+- Unsupported sections/metrics remain null or omitted by documented rule.
+- Cloudflare traffic, first-party standardized events, and BUS Core legacy pageviews are distinct source layers and are not equivalent.
+
+Current support-class reality reflected in operator language:
+
+- `buscore` => `legacy_hybrid`
+- `star_map_generator` => `event_only`
+- `tgc_site` => `event_only`
 
 **[v0.8.3 Site Payload Expansion]** The `site` view response parser and formatter now accepts and renders all available Lighthouse site payload fields:
 
@@ -107,7 +133,7 @@ This is a full rewrite path, not a preservation path for the previous Python imp
 | Command    | Status   | Backend                  | Description                      |
 | :--------- | :------- | :----------------------- | :------------------------------- |
 | `/health`  | Live     | None (static)            | Confirms Worker + DO operational |
-| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Operator-first deterministic report (`/report` all-sites, `/report site:<site_key>` one-site; advanced compatibility views supported) |
+| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Operator-first deterministic report (`/report` all-sites, `/report site:<site_key>` one-site; advanced compatibility views supported). Language follows Lighthouse support classes/capability layers and null-honesty semantics. |
 
 See `CONTRACTS.md` for detailed command contracts.
 

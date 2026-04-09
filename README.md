@@ -4,6 +4,8 @@ Agent Smith is a deterministic, personal-use Discord bot that watches fixed, rea
 
 Lighthouse is the reporting authority. Smith is a read-only consumer and operator interface for Lighthouse report views.
 
+Telemetry authority and normalization authority remain in Lighthouse. Smith does not define telemetry semantics; Smith reflects Lighthouse contracts with deterministic rendering.
+
 ## Commands
 
 | Command    | Description                                    |
@@ -27,7 +29,51 @@ Advanced compatibility path (secondary):
 - `/report view:source_health`
 - `/report view:site site:<site_key>`
 
-All-sites output is deterministic and sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`. One-site output follows BUS Core-style section flow (`Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Read`) while preserving Lighthouse authority and null semantics. Nulls are rendered as unavailable and are not rewritten to zero.
+All-sites output is deterministic and sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`. One-site output follows the canonical normalized per-site section flow (`Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Identity`, `Read`; `Identity` remains optional). Nulls are rendered as unavailable and are not rewritten to zero.
+
+## Lighthouse Terminology Alignment
+
+Smith operator language aligns to Lighthouse canonical terminology:
+
+- Support classes: `legacy_hybrid`, `event_only`, `event_plus_cf_traffic`, `not_yet_normalized`
+- Capability layers: `Layer 1 Registry`, `Layer 2 Event`, `Layer 3 Traffic`, `Layer 4 Identity`, `Layer 5 Extension`
+- Canonical shared comparable event names: `page_view`, `outbound_click`, `contact_click`, `service_interest`
+
+Current support-class reality:
+
+- `buscore` => `legacy_hybrid`
+- `star_map_generator` => `event_only`
+- `tgc_site` => `event_only`
+
+Normalization constraints (Lighthouse authority):
+
+- `TRACKED_SITES` is the canonical property registry.
+- `/metrics/event` is the canonical fleet telemetry path.
+- `/metrics/pageview` is BUS Core legacy-only support.
+- `dev_mode` is the canonical cross-site developer/operator suppression contract.
+- Normalization does not mean equal telemetry richness.
+- Unsupported metrics remain null or are omitted by documented rule.
+- Cloudflare traffic, first-party standardized events, and BUS Core legacy pageviews are distinct source layers and are not interchangeable.
+
+## Glossary
+
+- Support class: Lighthouse site-level telemetry profile (`legacy_hybrid`, `event_only`, etc.).
+- Capability layer: telemetry layer scope (`Layer 1 Registry` through `Layer 5 Extension`).
+- Normalization: shared contract language and comparable fields, not equal data richness.
+- `legacy_hybrid`: site combines modern event telemetry with legacy compatibility support.
+- `event_only`: site reports event-layer telemetry without additional traffic/identity layers unless added upstream.
+- Extension layer: site-specific additional telemetry beyond the shared base layers.
+- Null semantics: null/unavailable means unsupported or unavailable data, not zero.
+
+## How To Ask For Telemetry Changes
+
+Smith is read-only. Request telemetry capability changes in Lighthouse language:
+
+- "Add a traffic layer to TGC."
+- "Keep Star Map event_only."
+- "Add an extension layer to Star Map."
+- "Do not add identity to this site."
+- "Add shared outbound_click coverage to Buscore."
 
 See [CONTRACTS.md](CONTRACTS.md) for exact output shapes.
 

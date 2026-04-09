@@ -506,8 +506,8 @@ function formatSiteReport(report: SiteLighthouseReport): string {
       ].join('\n')
     : ['**Today**', '- unavailable'].join('\n');
 
-  // Events section with all event details
-  const eventsLines = ['**Events**'];
+  // Human Traffic / Events section with all event details
+  const eventsLines = ['**Human Traffic / Events**'];
   
   if (report.events) {
     eventsLines.push(`- Accepted signal 7d: ${formatNullableValue(report.events.accepted_signal_7d)}`);

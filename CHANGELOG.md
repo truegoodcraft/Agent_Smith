@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.6] — 2026-04-10
+
+### Changed
+
+*   **Analytics framing aligned to TGC policy and Lighthouse support classes**: Updated `README.md`, `CONTRACTS.md`, and `SOT.md` so Smith explicitly teaches the TGC analytics levels, support-class expectation model, and authority boundaries.
+*   **Star Map expectations made explicit**: Active docs/contracts now state that `star_map_generator` is `event_only` and should be judged mainly on pageviews, top paths, source/referrer/src attribution, and explicit funnel events if added later.
+*   **BUS Core parity drift removed from operator guidance**: Documentation now explicitly says BUS Core richness is not the universal standard, that reduced telemetry richness is not automatically a defect, and that host traffic and identity layers are optional capability layers rather than universal requirements.
+*   **Compact operator request guidance expanded**: Added preferred telemetry-change request examples plus the anti-pattern warning not to ask to "make it like Buscore" without naming the specific capability layers.
+*   **One-site `/report` read-lines now use support-layer wording**: Site report output now distinguishes traffic-layer metrics from page/event attribution and explicitly frames missing identity as unsupported unless Lighthouse provides Layer 4 data.
+
 ## [0.8.5] — 2026-04-08
 
 ### Fixed

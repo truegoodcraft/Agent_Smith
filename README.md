@@ -6,6 +6,8 @@ Lighthouse is the reporting authority. Smith is a read-only consumer and operato
 
 Telemetry authority and normalization authority remain in Lighthouse. Smith does not define telemetry semantics; Smith reflects Lighthouse contracts with deterministic rendering.
 
+TGC analytics policy defines the company baseline analytics language. Smith uses that language when describing reports, but Smith does not redefine the policy or Lighthouse telemetry semantics.
+
 ## Commands
 
 | Command    | Description                                    |
@@ -33,6 +35,24 @@ All-sites output is deterministic and sectioned as `Report · OK · 7d`, `Sites 
 
 BUS Core remains the allowed legacy-rich exception at the report-consumption layer: `/report site:buscore` uses Lighthouse legacy `/report`, while `/report site:tgc_site` and `/report site:star_map_generator` stay on the normalized site-view path with null-honest rendering.
 
+BUS Core is not the universal standard for every property. BUS Core is `legacy_hybrid` and may legitimately expose richer report sections. Star Map and TGC Site are currently `event_only` properties and should be evaluated mainly on page-level and event-level telemetry, not on host traffic or identity parity with BUS Core.
+
+For Star Map specifically, useful telemetry today is pageviews, top paths, source/referrer/src attribution, and explicit funnel events if they are added later. Lack of a traffic layer or identity layer is not automatically a defect.
+
+Host traffic is a different telemetry layer from page/app execution. Identity is optional and support-class dependent.
+
+Null or omitted values are honest when a site does not support a layer. Smith should not imply that every site ought to expose the same telemetry richness.
+
+## TGC Analytics Baseline
+
+Smith uses the TGC analytics policy levels when describing analytics scope:
+
+- Page Level
+- Host Level
+- App Level
+- User Level
+- Internal
+
 ## Lighthouse Terminology Alignment
 
 Smith operator language aligns to Lighthouse canonical terminology:
@@ -46,6 +66,12 @@ Current support-class reality:
 - `buscore` => `legacy_hybrid`
 - `star_map_generator` => `event_only`
 - `tgc_site` => `event_only`
+
+Expectation model by site:
+
+- `buscore`: `legacy_hybrid` and allowed to surface richer legacy report detail.
+- `star_map_generator`: `event_only` and evaluated mainly on page/event attribution coverage, not host traffic or identity depth.
+- `tgc_site`: `event_only` unless Lighthouse capability layers change upstream.
 
 Normalization constraints (Lighthouse authority):
 
@@ -76,6 +102,10 @@ Smith is read-only. Request telemetry capability changes in Lighthouse language:
 - "Add an extension layer to Star Map."
 - "Do not add identity to this site."
 - "Add shared outbound_click coverage to Buscore."
+
+Anti-pattern:
+
+- Do not ask to "make it like Buscore" unless the request names the specific capability layers to add.
 
 See [CONTRACTS.md](CONTRACTS.md) for exact output shapes.
 

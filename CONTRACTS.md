@@ -4,6 +4,18 @@ This document defines the canonical input/output contracts for Agent Smith's act
 
 Telemetry authority is Lighthouse. Smith is a read-only consumer and deterministic operator formatter.
 
+TGC analytics policy defines the company baseline analytics language. Smith uses that policy vocabulary when explaining report scope, but Smith does not redefine telemetry semantics.
+
+## TGC Analytics Baseline
+
+Smith uses the following TGC analytics policy levels when describing analytics scope:
+
+- Page Level
+- Host Level
+- App Level
+- User Level
+- Internal
+
 ## Canonical Terminology
 
 Smith contract language uses Lighthouse canonical terms:
@@ -22,6 +34,16 @@ Normalization language constraints:
 - Normalization does not imply equal telemetry richness across sites.
 - Unsupported sections/metrics remain null or are omitted by documented rule.
 - Cloudflare traffic, first-party standardized events, and BUS Core legacy pageviews are distinct source layers.
+
+Per-site expectation constraints:
+
+- `buscore` is `legacy_hybrid` and may legitimately render richer report sections.
+- `star_map_generator` is `event_only` and should be evaluated mainly on page-level and event-level telemetry.
+- `tgc_site` is `event_only` unless Lighthouse capability layers change upstream.
+- Lack of Layer 3 Traffic or Layer 4 Identity support is not automatically a defect.
+- Host traffic is not the same as page/app execution.
+- Identity is optional and support-class dependent.
+- Null or omitted values are honest when a layer is unsupported or unavailable.
 
 ## Active Commands
 
@@ -64,6 +86,8 @@ Operator-first deterministic report for all tracked sites or one selected site f
   - `site:buscore` is a permitted legacy-rich exception at the report-consumption layer and uses legacy section flow: `Report · OK · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic`, `Observability`, `Identity`, `Read` (`Identity` is optional).
   - Site formatting follows canonical normalized per-site flow: `Report · <Site Label> · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Identity`, `Read` (`Identity` is optional).
   - Section naming and content do not imply telemetry parity between support classes.
+  - Site read-lines should preserve the distinction between Layer 2 page/event attribution and Layer 3 traffic metrics.
+  - Site read-lines should not imply that missing traffic or identity layers are defects when the site does not support them.
   - Source health formatting reports telemetry integrity values only and avoids noisy unavailable signal-state fields.
   - `null` values must render as unavailable and must not be coerced to `0`.
   - `accepted_signal_7d` is treated as a numeric count and rendered accordingly.
@@ -74,6 +98,20 @@ Operator-first deterministic report for all tracked sites or one selected site f
   - `400 {"ok":false,"error":"missing_site_key"}` → deterministic ephemeral operator error.
   - `400 {"ok":false,"error":"invalid_site_key"}` → deterministic ephemeral operator error.
   - Any other fetch/validation failure returns deterministic ephemeral failure text.
+
+## Operator Guidance
+
+Preferred request examples:
+
+- "Add a traffic layer to TGC."
+- "Keep Star Map event_only."
+- "Add an extension layer to Star Map."
+- "Do not add identity to this site."
+- "Add shared outbound_click coverage to Buscore."
+
+Anti-pattern:
+
+- Do not ask to "make it like Buscore" unless the request explicitly names the capability layers to add.
 
 ## Deferred Commands
 

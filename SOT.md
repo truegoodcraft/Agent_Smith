@@ -2,9 +2,44 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.8.5 — BUS Core legacy-rich site routing correction)
+## Current Mission (v0.8.6 — analytics framing alignment by support class)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+**[v0.8.6 Analytics Framing Alignment]** Smith documentation, contracts, and operator read-lines now explicitly align to TGC analytics policy language and Lighthouse support-class expectations.
+
+TGC analytics policy is the company baseline for analytics scope language. Smith uses the following TGC levels when describing analytics scope:
+
+- `Page Level`
+- `Host Level`
+- `App Level`
+- `User Level`
+- `Internal`
+
+Authority boundaries remain explicit:
+
+- Lighthouse is the telemetry authority and normalization authority.
+- TGC analytics policy defines the company baseline analytics language.
+- Smith formats and explains reports; it does not define telemetry semantics.
+
+Expectation framing is now explicit by support class:
+
+- `buscore` is `legacy_hybrid` and may legitimately expose richer operator sections.
+- `star_map_generator` is `event_only` and should be evaluated mainly on page-level and event-level telemetry.
+- `tgc_site` is `event_only` unless capability layers change upstream in Lighthouse.
+
+Star Map expectations are explicit in active docs/contracts/operator wording:
+
+- Useful Star Map telemetry includes pageviews, top paths, source/referrer/src attribution, and explicit funnel events if added later.
+- Lack of Layer 3 Traffic or Layer 4 Identity support is not automatically a defect.
+- Reduced telemetry richness is not itself a defect when the site is only intended to support lighter telemetry.
+
+Operator wording must preserve these rules:
+
+- Host traffic is not the same as page/app execution.
+- Identity is optional and support-class dependent.
+- Null or omitted values are honest when a layer is unsupported or unavailable.
+- BUS Core richness is not the universal standard for all properties.
 
 **[v0.8.5 BUS Core Legacy-Rich Exception]** `/report` remains operator-first with split routing by site key:
 
@@ -40,6 +75,18 @@ Current support-class reality reflected in operator language:
 - `buscore` => `legacy_hybrid`
 - `star_map_generator` => `event_only`
 - `tgc_site` => `event_only`
+
+Operator guidance examples now retained in active docs/contracts:
+
+- `Add a traffic layer to TGC`
+- `Keep Star Map event_only`
+- `Add an extension layer to Star Map`
+- `Do not add identity to this site`
+- `Add shared outbound_click coverage to Buscore`
+
+Anti-pattern retained in active docs/contracts:
+
+- Do not ask to `make it like Buscore` unless the requested capability layers are named explicitly.
 
 **[v0.8.3 Site Payload Expansion]** The `site` view response parser and formatter now accepts and renders all available Lighthouse site payload fields:
 

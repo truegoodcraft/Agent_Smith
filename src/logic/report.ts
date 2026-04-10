@@ -582,13 +582,16 @@ function formatSiteReport(report: SiteLighthouseReport): string {
   const recentSignal = report.summary?.has_recent_signal || report.events?.has_recent_signal;
 
   if (typeof requests7d === 'number' && requests7d > 0) {
-    readLines.push('Traffic activity is present in the 7-day window.');
+    readLines.push('Traffic-layer activity is present in the 7-day window.');
   } else if (requests7d === 0) {
-    readLines.push('No request traffic recorded for the 7-day window.');
-  } else if (typeof pageviews7d === 'number' && pageviews7d > 0) {
-    readLines.push('Pageview signal is present in the 7-day window.');
+    readLines.push('No traffic-layer requests were recorded for the 7-day window.');
+  } else if (
+    (typeof pageviews7d === 'number' && pageviews7d > 0) ||
+    (typeof acceptedEvents7d === 'number' && acceptedEvents7d > 0)
+  ) {
+    readLines.push('Page/event attribution signal is present even if a traffic layer is unavailable for this site.');
   } else {
-    readLines.push('Traffic signal is unavailable or not yet present for this site.');
+    readLines.push('Traffic-layer signal is unavailable, unsupported for this site, or not yet present.');
   }
 
   if (typeof acceptedEvents7d === 'number') {
@@ -612,6 +615,10 @@ function formatSiteReport(report: SiteLighthouseReport): string {
 
   if (typeof recentSignal === 'boolean') {
     readLines.push(`Signal state is ${recentSignal ? 'recent and healthy.' : 'stale; refresh may be needed.'}`);
+  }
+
+  if (!report.identity) {
+    readLines.push('Identity-layer telemetry is shown only when Lighthouse provides Layer 4 support for this site.');
   }
 
   if (readLines.length === 0) {

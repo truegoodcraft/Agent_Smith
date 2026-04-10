@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.0] — 2026-04-10
+
+### Changed
+
+*   **Site report wording now follows Lighthouse support-class truth more explicitly**: Normalized site reports now surface support class in the summary, rename the normalized site event section to `Event Telemetry`, and distinguish `event_only` sites from BUS Core's richer `legacy_hybrid` posture.
+*   **Event-only traffic and identity gaps are framed as unsupported by design**: `tgc_site` and `star_map_generator` report wording now explains missing Layer 3 traffic and Layer 4 identity in support-layer terms instead of generic absence language.
+*   **Event telemetry wording made more precise**: Site summaries and read-lines now prefer event telemetry phrasing, including `page_view` naming and explicit path/source/referrer attribution language where Lighthouse provides those signals.
+*   **Legacy-rich framing clarified for BUS Core-style reports**: Legacy `/report` output now explicitly states that the legacy-rich path is intentionally richer than normalized `event_only` views rather than implying a universal template.
+*   **Docs/contracts/governance alignment completed in one pass**: Updated `README.md`, `CONTRACTS.md`, and `SOT.md` to match the new presentation language and bumped repo/package versions accordingly.
+
 ## [0.8.6] — 2026-04-10
 
 ### Changed

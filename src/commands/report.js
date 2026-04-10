@@ -127,7 +127,7 @@ export const report = {
     name: 'report',
     definition: {
         name: 'report',
-        description: 'Operator report for all tracked sites or one selected site',
+        description: 'Operator report aligned to Lighthouse support classes and site capabilities',
         type: 1,
         options: [
             {

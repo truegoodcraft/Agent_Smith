@@ -307,8 +307,8 @@ test('null metrics render as unavailable, never as zero', () => {
   };
 
   const output = formatLighthouseReport(report);
-  assert.match(output, /pageviews unavailable/);
-  assert.doesNotMatch(output, /pageviews 0/);
+  assert.match(output, /page_view unavailable/);
+  assert.doesNotMatch(output, /page_view 0/);
 });
 
 test('fleet report hides unavailable has_recent_signal noise', () => {
@@ -349,6 +349,7 @@ test('legacy report path still formats', () => {
   assert.ok(payload);
   const output = formatLighthouseReport(payload);
   assert.match(output, /\*\*Report · OK · today\*\*/);
+  assert.match(output, /legacy-rich report path is intentionally richer than normalized event_only site views/);
 });
 
 function buildInteraction(options?: Array<{ name: string; value: string }>): APIApplicationCommandInteraction {
@@ -516,7 +517,7 @@ test('report site:tgc_site uses normalized site view', async () => {
           site_key: 'tgc_site',
           label: 'TGC Site',
           backend_source: 'lighthouse',
-          cloudflare_traffic_enabled: true,
+          cloudflare_traffic_enabled: false,
         },
         summary: { requests_7d: null, visits_7d: null, pageviews_7d: null },
         traffic: null,
@@ -531,7 +532,11 @@ test('report site:tgc_site uses normalized site view', async () => {
       assert.match(requestedUrl, /view=site/);
       assert.match(requestedUrl, /site_key=tgc_site/);
       assert.match(String(content), /Report · TGC Site · 7d/);
-      assert.match(String(content), /\*\*Human Traffic \/ Events\*\*/);
+      assert.match(String(content), /\*\*Event Telemetry\*\*/);
+      assert.match(String(content), /Support class: event_only/);
+      assert.match(String(content), /Traffic layer is not enabled for this site, so request\/visit fields are unsupported/);
+      assert.match(String(content), /Event telemetry is active for this site \(2 accepted in 7d\)/);
+      assert.match(String(content), /Identity-layer telemetry is shown only when Lighthouse provides Layer 4 support/);
     },
   );
 });
@@ -550,12 +555,16 @@ test('report site:star_map_generator uses normalized site view', async () => {
           backend_source: 'lighthouse',
           cloudflare_traffic_enabled: false,
         },
-        summary: { requests_7d: 1, visits_7d: 1, pageviews_7d: 0 },
-        traffic: {
-          latest_day: { day: null, requests: null, visits: null, captured_at: null },
-          last_7_days: { requests: 1, visits: 1, avg_daily_requests: 0.1, avg_daily_visits: 0.1, days_with_data: 1 },
+        summary: { requests_7d: null, visits_7d: null, pageviews_7d: 3 },
+        traffic: null,
+        events: {
+          accepted_signal_7d: 1,
+          has_recent_signal: true,
+          last_received_at: '2026-04-08T00:00:00Z',
+          unique_paths: 2,
+          top_sources: [{ name: 'github', count: 1 }],
+          top_referrers: [{ name: 'example.com', count: 1 }],
         },
-        events: { accepted_signal_7d: 1, has_recent_signal: true, last_received_at: '2026-04-08T00:00:00Z' },
         health: { dropped_invalid: 0, dropped_rate_limited: 0 },
       })) as Response;
     }) as typeof globalThis.fetch,
@@ -566,7 +575,9 @@ test('report site:star_map_generator uses normalized site view', async () => {
       assert.match(requestedUrl, /view=site/);
       assert.match(requestedUrl, /site_key=star_map_generator/);
       assert.match(String(content), /Report · Star Map Generator · 7d/);
-      assert.match(String(content), /\*\*Human Traffic \/ Events\*\*/);
+      assert.match(String(content), /\*\*Event Telemetry\*\*/);
+      assert.match(String(content), /Support class: event_only/);
+      assert.match(String(content), /Path\/source\/referrer attribution is being reported from event telemetry/);
     },
   );
 });
@@ -618,6 +629,7 @@ test('site report summary displays all expanded fields when present', () => {
   assert.equal(parsed.summary?.has_recent_signal, true);
 
   const output = formatLighthouseReport(parsed);
+  assert.match(output, /Support class: legacy_hybrid/);
   assert.match(output, /Accepted events 7d: 42/);
   assert.match(output, /Last received: 2026-04-08T20:00:00Z/);
   assert.match(output, /Signal state: recent/);
@@ -659,6 +671,7 @@ test('site report events section displays event details when present', () => {
   assert.match(output, /Accepted signal 7d: 50/);
   assert.match(output, /Accepted events: 48/);
   assert.match(output, /Unique paths: 12/);
+  assert.match(output, /\*\*Event Telemetry\*\*/);
   assert.match(output, /By Event Name:/);
   assert.match(output, /click \(30\)/);
   assert.match(output, /Top sources:/);

@@ -38,7 +38,7 @@ Normalization language constraints:
 Per-site expectation constraints:
 
 - `buscore` is `legacy_hybrid` and may legitimately render richer report sections.
-- `star_map_generator` is `event_only` and should be evaluated mainly on page-level and event-level telemetry.
+- `star_map_generator` is `event_only` and should be evaluated mainly on event telemetry, `page_view` events where used, and path/source/referrer/src attribution from events.
 - `tgc_site` is `event_only` unless Lighthouse capability layers change upstream.
 - Lack of Layer 3 Traffic or Layer 4 Identity support is not automatically a defect.
 - Host traffic is not the same as page/app execution.
@@ -84,10 +84,12 @@ Operator-first deterministic report for all tracked sites or one selected site f
 - **Deterministic output expectations**:
   - Fleet/all-sites formatting is sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`.
   - `site:buscore` is a permitted legacy-rich exception at the report-consumption layer and uses legacy section flow: `Report · OK · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic`, `Observability`, `Identity`, `Read` (`Identity` is optional).
-  - Site formatting follows canonical normalized per-site flow: `Report · <Site Label> · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Identity`, `Read` (`Identity` is optional).
+  - Site formatting follows canonical normalized per-site flow: `Report · <Site Label> · 7d`, `Summary`, `Today`, `Traffic`, `Event Telemetry`, `Observability`, `Identity`, `Read` (`Identity` is optional).
+  - Normalized site summary includes support-class framing where Smith has authoritative site-class knowledge.
   - Section naming and content do not imply telemetry parity between support classes.
   - Site read-lines should preserve the distinction between Layer 2 page/event attribution and Layer 3 traffic metrics.
   - Site read-lines should not imply that missing traffic or identity layers are defects when the site does not support them.
+  - Event-only sites should describe unsupported traffic and identity layers as unsupported by design when Lighthouse does not provide those layers.
   - Source health formatting reports telemetry integrity values only and avoids noisy unavailable signal-state fields.
   - `null` values must render as unavailable and must not be coerced to `0`.
   - `accepted_signal_7d` is treated as a numeric count and rendered accordingly.

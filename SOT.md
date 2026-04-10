@@ -2,9 +2,19 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.8.6 — analytics framing alignment by support class)
+## Current Mission (v0.9.0 — site reporting language cleanup by support class)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+**[v0.9.0 Site Reporting Language Cleanup]** Smith report presentation, docs, and contracts now explicitly frame site reports by Lighthouse support class and capability layer without implying BUS Core parity.
+
+Normalized site-report wording now follows these active rules:
+
+- `star_map_generator` and `tgc_site` read as `event_only` properties.
+- Unsupported Layer 3 Traffic and Layer 4 Identity should read as unsupported by design when Lighthouse does not provide those layers.
+- Event telemetry should be described as event telemetry, `page_view` events where used, and path/source/referrer attribution from events.
+- BUS Core remains `legacy_hybrid`, intentionally richer, and not the universal template for all properties.
+- Lighthouse field meanings remain intact; Smith changes wording and presentation only.
 
 **[v0.8.6 Analytics Framing Alignment]** Smith documentation, contracts, and operator read-lines now explicitly align to TGC analytics policy language and Lighthouse support-class expectations.
 
@@ -30,7 +40,7 @@ Expectation framing is now explicit by support class:
 
 Star Map expectations are explicit in active docs/contracts/operator wording:
 
-- Useful Star Map telemetry includes pageviews, top paths, source/referrer/src attribution, and explicit funnel events if added later.
+- Useful Star Map telemetry includes event telemetry, `page_view` events where used, top paths, source/referrer/src attribution from events, and explicit funnel events if added later.
 - Lack of Layer 3 Traffic or Layer 4 Identity support is not automatically a defect.
 - Reduced telemetry richness is not itself a defect when the site is only intended to support lighter telemetry.
 
@@ -39,6 +49,7 @@ Operator wording must preserve these rules:
 - Host traffic is not the same as page/app execution.
 - Identity is optional and support-class dependent.
 - Null or omitted values are honest when a layer is unsupported or unavailable.
+- Unsupported Layer 3 or Layer 4 coverage should read as unsupported by design, not as broken.
 - BUS Core richness is not the universal standard for all properties.
 
 **[v0.8.5 BUS Core Legacy-Rich Exception]** `/report` remains operator-first with split routing by site key:
@@ -58,7 +69,7 @@ Canonical terminology now used across Smith docs/contracts/operator wording:
 - Capability layers: `Layer 1 Registry`, `Layer 2 Event`, `Layer 3 Traffic`, `Layer 4 Identity`, `Layer 5 Extension`
 - Shared comparable event names: `page_view`, `outbound_click`, `contact_click`, `service_interest`
 - Shared field meaning freeze: `accepted_signal_7d`, `accepted_events_7d`, `has_recent_signal`, `last_received_at`, `cloudflare_traffic_enabled`
-- Canonical normalized per-site report sections: `Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Identity`, `Read`
+- Canonical normalized per-site report sections: `Summary`, `Today`, `Traffic`, `Event Telemetry`, `Observability`, `Identity`, `Read`
 
 Normalization rules reflected in Smith language:
 
@@ -189,7 +200,7 @@ This is a full rewrite path, not a preservation path for the previous Python imp
 | Command    | Status   | Backend                  | Description                      |
 | :--------- | :------- | :----------------------- | :------------------------------- |
 | `/health`  | Live     | None (static)            | Confirms Worker + DO operational |
-| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Operator-first deterministic report (`/report` all-sites, `/report site:buscore` legacy-rich BUS Core exception, `/report site:tgc_site|star_map_generator` normalized one-site; advanced compatibility views supported). Language follows Lighthouse support classes/capability layers and null-honesty semantics. |
+| `/report`  | Live     | `LIGHTHOUSE_REPORT_URL`  | Operator-first deterministic report (`/report` all-sites, `/report site:buscore` legacy-rich BUS Core exception, `/report site:tgc_site|star_map_generator` normalized one-site; advanced compatibility views supported). Language follows Lighthouse support classes/capability layers, frames event_only traffic and identity gaps as unsupported by design, and preserves null-honesty semantics. |
 
 See `CONTRACTS.md` for detailed command contracts.
 

@@ -13,7 +13,7 @@ TGC analytics policy defines the company baseline analytics language. Smith uses
 | Command    | Description                                    |
 | :--------- | :--------------------------------------------- |
 | `/health`  | Confirms Worker + Durable Object are running   |
-| `/report`  | Operator report for all tracked sites or one selected site |
+| `/report`  | Operator report aligned to Lighthouse support classes and site capabilities |
 
 `/traffic` and `/errors` are planned but not yet implemented.
 
@@ -31,17 +31,17 @@ Advanced compatibility path (secondary):
 - `/report view:source_health`
 - `/report view:site site:<site_key>`
 
-All-sites output is deterministic and sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`. One-site output follows the canonical normalized per-site section flow (`Summary`, `Today`, `Traffic`, `Human Traffic / Events`, `Observability`, `Identity`, `Read`; `Identity` remains optional). Nulls are rendered as unavailable and are not rewritten to zero.
+All-sites output is deterministic and sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`. One-site output follows the canonical normalized per-site section flow (`Summary`, `Today`, `Traffic`, `Event Telemetry`, `Observability`, `Identity`, `Read`; `Identity` remains optional). Nulls are rendered as unavailable and are not rewritten to zero.
 
 BUS Core remains the allowed legacy-rich exception at the report-consumption layer: `/report site:buscore` uses Lighthouse legacy `/report`, while `/report site:tgc_site` and `/report site:star_map_generator` stay on the normalized site-view path with null-honest rendering.
 
-BUS Core is not the universal standard for every property. BUS Core is `legacy_hybrid` and may legitimately expose richer report sections. Star Map and TGC Site are currently `event_only` properties and should be evaluated mainly on page-level and event-level telemetry, not on host traffic or identity parity with BUS Core.
+BUS Core is not the universal standard for every property. BUS Core is `legacy_hybrid` and may legitimately expose richer report sections. Star Map and TGC Site are currently `event_only` properties and should be evaluated mainly on event telemetry, `page_view` events where used, and path/source/referrer/src attribution from events, not on host traffic or identity parity with BUS Core.
 
-For Star Map specifically, useful telemetry today is pageviews, top paths, source/referrer/src attribution, and explicit funnel events if they are added later. Lack of a traffic layer or identity layer is not automatically a defect.
+For Star Map specifically, useful telemetry today is event telemetry, `page_view` events where used, top paths, source/referrer/src attribution from events, and explicit funnel events if they are added later. Lack of a traffic layer or identity layer is not automatically a defect.
 
 Host traffic is a different telemetry layer from page/app execution. Identity is optional and support-class dependent.
 
-Null or omitted values are honest when a site does not support a layer. Smith should not imply that every site ought to expose the same telemetry richness.
+Null or omitted values are honest when a site does not support a layer. Smith should describe unsupported traffic or identity layers as unsupported by design, not as broken. Smith should not imply that every site ought to expose the same telemetry richness.
 
 ## TGC Analytics Baseline
 

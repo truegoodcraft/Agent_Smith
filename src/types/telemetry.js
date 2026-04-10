@@ -299,10 +299,19 @@ function normalizeSiteReportSummary(data) {
     if (!isRecord(data)) {
         return null;
     }
+    const acceptedSignal7d = getNullableNumberFromAliases(data, 'accepted_signal_7d', [
+        'accepted_events_7d',
+    ]);
+    const lastReceivedAt = getNullableStringFromAliases(data, 'last_received_at', ['last_received']);
     return {
         pageviews_7d: isNullableNumber(data.pageviews_7d) ? data.pageviews_7d : undefined,
         requests_7d: isNullableNumber(data.requests_7d) ? data.requests_7d : undefined,
         visits_7d: isNullableNumber(data.visits_7d) ? data.visits_7d : undefined,
+        accepted_events_7d: acceptedSignal7d,
+        last_received_at: lastReceivedAt,
+        has_recent_signal: typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
+            ? data.has_recent_signal
+            : undefined,
     };
 }
 function normalizeSiteReportTraffic(data) {
@@ -312,6 +321,9 @@ function normalizeSiteReportTraffic(data) {
     if (!isRecord(data)) {
         return null;
     }
+    const cloudflareTrafficEnabled = getNullableBooleanFromAliases(data, 'cloudflare_traffic_enabled', [
+        'traffic_enabled',
+    ]);
     const latestDay = isRecord(data.latest_day)
         ? {
             day: isNullableString(data.latest_day.day) ? data.latest_day.day : undefined,
@@ -342,6 +354,7 @@ function normalizeSiteReportTraffic(data) {
             ? null
             : undefined;
     return {
+        cloudflare_traffic_enabled: cloudflareTrafficEnabled,
         latest_day: latestDay,
         last_7_days: last7Days,
     };
@@ -357,12 +370,31 @@ function normalizeSiteReportEvents(data) {
         'accepted_events_7d',
     ]);
     const lastReceivedAt = getNullableStringFromAliases(data, 'last_received_at', ['last_received']);
+    const byEventName = isRecord(data.by_event_name)
+        ? data.by_event_name
+        : undefined;
+    const normalizeEventTopItems = (items) => {
+        if (!Array.isArray(items)) {
+            return undefined;
+        }
+        const normalized = items
+            .filter((item) => isRecord(item))
+            .filter((item) => typeof item.name === 'string' && typeof item.count === 'number')
+            .map((item) => ({ name: item.name, count: item.count }));
+        return normalized.length > 0 ? normalized : undefined;
+    };
     return {
         accepted_signal_7d: acceptedSignal7d,
+        accepted_events: isNullableNumber(data.accepted_events) ? data.accepted_events : undefined,
         has_recent_signal: typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
             ? data.has_recent_signal
             : undefined,
         last_received_at: lastReceivedAt,
+        unique_paths: isNullableNumber(data.unique_paths) ? data.unique_paths : undefined,
+        by_event_name: byEventName,
+        top_sources: normalizeEventTopItems(data.top_sources),
+        top_campaigns: normalizeEventTopItems(data.top_campaigns),
+        top_referrers: normalizeEventTopItems(data.top_referrers),
     };
 }
 function normalizeSiteReportHealth(data) {
@@ -372,9 +404,67 @@ function normalizeSiteReportHealth(data) {
     if (!isRecord(data)) {
         return null;
     }
+    const cloudflareTrafficEnabled = getNullableBooleanFromAliases(data, 'cloudflare_traffic_enabled', [
+        'traffic_enabled',
+    ]);
+    const lastReceivedAt = getNullableStringFromAliases(data, 'last_received_at', ['last_received']);
     return {
         dropped_invalid: isNullableNumber(data.dropped_invalid) ? data.dropped_invalid : undefined,
         dropped_rate_limited: isNullableNumber(data.dropped_rate_limited) ? data.dropped_rate_limited : undefined,
+        last_received_at: lastReceivedAt,
+        included_events: isNullableNumber(data.included_events) ? data.included_events : undefined,
+        excluded_test_mode: isNullableNumber(data.excluded_test_mode) ? data.excluded_test_mode : undefined,
+        excluded_non_production_host: isNullableNumber(data.excluded_non_production_host)
+            ? data.excluded_non_production_host
+            : undefined,
+        cloudflare_traffic_enabled: cloudflareTrafficEnabled,
+        production_only_default: typeof data.production_only_default === 'boolean' || data.production_only_default === null
+            ? data.production_only_default
+            : undefined,
+    };
+}
+function normalizeSiteReportIdentity(data) {
+    if (data === null || data === undefined) {
+        return undefined;
+    }
+    if (!isRecord(data)) {
+        return undefined;
+    }
+    const normalizeWindow = (window) => {
+        if (!isRecord(window)) {
+            return undefined;
+        }
+        return {
+            new_users: typeof window.new_users === 'number' || window.new_users === null ? window.new_users : undefined,
+            returning_users: typeof window.returning_users === 'number' || window.returning_users === null ? window.returning_users : undefined,
+            sessions: typeof window.sessions === 'number' || window.sessions === null ? window.sessions : undefined,
+        };
+    };
+    const normalizeLast7Days = (window) => {
+        if (!isRecord(window)) {
+            return undefined;
+        }
+        return {
+            new_users: typeof window.new_users === 'number' || window.new_users === null ? window.new_users : undefined,
+            returning_users: typeof window.returning_users === 'number' || window.returning_users === null ? window.returning_users : undefined,
+            sessions: typeof window.sessions === 'number' || window.sessions === null ? window.sessions : undefined,
+            return_rate: typeof window.return_rate === 'number' || window.return_rate === null ? window.return_rate : undefined,
+        };
+    };
+    const normalizeTopSources = (sources) => {
+        if (!Array.isArray(sources)) {
+            return undefined;
+        }
+        const normalized = sources
+            .filter((entry) => isRecord(entry))
+            .filter((entry) => typeof entry.source === 'string' && typeof entry.users === 'number')
+            .map((entry) => ({ source: entry.source, users: entry.users }));
+        return normalized.length > 0 ? normalized : undefined;
+    };
+    return {
+        today: normalizeWindow(data.today),
+        last_7_days: normalizeLast7Days(data.last_7_days),
+        top_sources_by_returning_users: normalizeTopSources(data.top_sources_by_returning_users),
     };
 }
 export function normalizeFleetLighthouseReport(data) {
@@ -402,6 +492,7 @@ export function normalizeSiteLighthouseReport(data) {
         traffic: normalizeSiteReportTraffic(data.traffic),
         events: normalizeSiteReportEvents(data.events),
         health: normalizeSiteReportHealth(data.health),
+        identity: normalizeSiteReportIdentity(data.identity),
     };
 }
 export function normalizeSourceHealthLighthouseReport(data) {

@@ -33,6 +33,8 @@ Advanced compatibility path (secondary):
 
 All-sites output is deterministic and sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`. One-site output follows the canonical normalized per-site section flow (`Summary`, `Today`, `Traffic`, `Event Telemetry`, `Observability`, `Identity`, `Read`; `Identity` remains optional). Nulls are rendered as unavailable and are not rewritten to zero.
 
+For `event_only` sites (including Star Map and TGC Site), Smith now prioritizes event telemetry usefulness in the one-site output: `page_view` count, attribution lists (top paths when provided, top sources, top campaigns, top referrers), event-name breakdown, and observability. Traffic/identity layer status is kept as one compact support-class note instead of repeated unavailable-only phrasing.
+
 BUS Core remains the allowed legacy-rich exception at the report-consumption layer: `/report site:buscore` uses Lighthouse legacy `/report`, while `/report site:tgc_site` and `/report site:star_map_generator` stay on the normalized site-view path with null-honest rendering.
 
 BUS Core is not the universal standard for every property. BUS Core is `legacy_hybrid` and may legitimately expose richer report sections. Star Map and TGC Site are currently `event_only` properties and should be evaluated mainly on event telemetry, `page_view` events where used, and path/source/referrer/src attribution from events, not on host traffic or identity parity with BUS Core.

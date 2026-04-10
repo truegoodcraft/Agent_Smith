@@ -521,9 +521,28 @@ function formatSiteEventsByName(byEventName?: Record<string, number> | null): st
   return ['By Event Name:', ...entries.map((entry) => `  - ${entry}`)].join('\n');
 }
 
+function formatSiteTopPaths(topPaths?: Array<{ path: string; pageviews?: number; count?: number }>): string {
+  if (!topPaths || topPaths.length === 0) {
+    return '';
+  }
+
+  const entries = topPaths.map((entry) => {
+    const count = typeof entry.pageviews === 'number'
+      ? entry.pageviews
+      : typeof entry.count === 'number'
+        ? entry.count
+        : undefined;
+
+    return `${entry.path} (${formatNullableValue(count)})`;
+  });
+
+  return ['Top Paths:', ...entries.map((entry) => `  - ${entry}`)].join('\n');
+}
+
 function formatSiteReport(report: SiteLighthouseReport): string {
   const siteLabel = report.scope?.label || report.scope?.site_key || 'Site';
   const supportClass = getSupportClass(report.scope?.site_key);
+  const isEventOnlySite = supportClass === 'event_only';
   const trafficEnabled = getSiteTrafficEnabled(report);
   const requests7d = report.summary?.requests_7d;
   const visits7d = report.summary?.visits_7d;
@@ -534,8 +553,19 @@ function formatSiteReport(report: SiteLighthouseReport): string {
   const lastReceived =
     report.summary?.last_received_at ?? report.health?.last_received_at ?? report.events?.last_received_at;
   const recentSignal = report.summary?.has_recent_signal ?? report.events?.has_recent_signal;
+  const byEventName = report.events?.by_event_name ?? undefined;
+  const pageViewFromByName = byEventName && typeof byEventName.page_view === 'number'
+    ? byEventName.page_view
+    : undefined;
+  const pageViewEvents7d = typeof pageviews7d === 'number' ? pageviews7d : pageViewFromByName;
+  const eventRecord = report.events as unknown as Record<string, unknown> | undefined;
+  const topPaths = Array.isArray(eventRecord?.top_paths)
+    ? (eventRecord.top_paths as Array<{ path: string; pageviews?: number; count?: number }>).filter(
+        (entry) => entry && typeof entry.path === 'string',
+      )
+    : undefined;
   const trafficUnsupportedByDesign =
-    supportClass === 'event_only' &&
+    isEventOnlySite &&
     trafficEnabled !== true &&
     !(typeof requests7d === 'number' && requests7d > 0) &&
     !(typeof visits7d === 'number' && visits7d > 0);
@@ -566,7 +596,9 @@ function formatSiteReport(report: SiteLighthouseReport): string {
 
   const eventsLines = ['**Event Telemetry**'];
   if (report.events) {
+    eventsLines.push(`- page_view events 7d: ${formatNullableValue(pageViewEvents7d)}`);
     eventsLines.push(`- Accepted signal 7d: ${formatNullableValue(report.events.accepted_signal_7d)}`);
+    eventsLines.push(`- Accepted events 7d: ${formatNullableValue(acceptedEvents7d)}`);
     eventsLines.push(`- Accepted events: ${formatNullableValue(report.events.accepted_events)}`);
     eventsLines.push(`- Unique paths: ${formatNullableValue(report.events.unique_paths)}`);
     eventsLines.push(`- Last signal received: ${formatNullableValue(report.events.last_received_at)}`);
@@ -575,15 +607,48 @@ function formatSiteReport(report: SiteLighthouseReport): string {
       eventsLines.push(`- Signal state: ${report.events.has_recent_signal ? 'recent' : 'stale'}`);
     }
 
-    const topSourcesBlock = formatSiteEventsTopList('- Top sources:', report.events.top_sources);
-    const topCampaignsBlock = formatSiteEventsTopList('- Top campaigns:', report.events.top_campaigns);
-    const topReferrersBlock = formatSiteEventsTopList('- Top referrers:', report.events.top_referrers);
+    const topPathsBlock = formatSiteTopPaths(topPaths);
+    const topSourcesBlock = formatSiteEventsTopList('Top Sources:', report.events.top_sources);
+    const topCampaignsBlock = formatSiteEventsTopList('Top Campaigns:', report.events.top_campaigns);
+    const topReferrersBlock = formatSiteEventsTopList('Top Referrers:', report.events.top_referrers);
     const byEventNameBlock = formatSiteEventsByName(report.events.by_event_name);
+    const missingAttribution: string[] = [];
 
-    if (topSourcesBlock) eventsLines.push(topSourcesBlock);
-    if (topCampaignsBlock) eventsLines.push(topCampaignsBlock);
-    if (topReferrersBlock) eventsLines.push(topReferrersBlock);
-    if (byEventNameBlock) eventsLines.push('- ' + byEventNameBlock.replace(/\n/g, '\n  '));
+    if (topPathsBlock) {
+      eventsLines.push(topPathsBlock);
+    } else {
+      missingAttribution.push('top paths');
+    }
+
+    if (topSourcesBlock) {
+      eventsLines.push(topSourcesBlock);
+    } else {
+      missingAttribution.push('top sources');
+    }
+
+    if (topCampaignsBlock) {
+      eventsLines.push(topCampaignsBlock);
+    } else {
+      missingAttribution.push('top campaigns');
+    }
+
+    if (topReferrersBlock) {
+      eventsLines.push(topReferrersBlock);
+    } else {
+      missingAttribution.push('top referrers');
+    }
+
+    if (missingAttribution.length === 4) {
+      eventsLines.push('- Attribution lists were not provided in this Lighthouse payload (top paths/sources/campaigns/referrers).');
+    } else if (missingAttribution.length > 0) {
+      eventsLines.push(`- Missing attribution lists in payload: ${missingAttribution.join(', ')}.`);
+    }
+
+    if (byEventNameBlock) {
+      eventsLines.push(byEventNameBlock);
+    } else {
+      eventsLines.push('- Event-name breakdown: unavailable');
+    }
   } else {
     eventsLines.push('- unavailable');
   }
@@ -627,7 +692,7 @@ function formatSiteReport(report: SiteLighthouseReport): string {
   }
 
   const readLines: string[] = [];
-  if (supportClass === 'event_only') {
+  if (isEventOnlySite) {
     readLines.push('This site is event_only under current Lighthouse support-class rules.');
   } else if (supportClass === 'legacy_hybrid') {
     readLines.push(
@@ -636,7 +701,7 @@ function formatSiteReport(report: SiteLighthouseReport): string {
   }
 
   if (trafficUnsupportedByDesign) {
-    readLines.push('Traffic layer is not enabled for this site, so request/visit fields are unsupported.');
+    readLines.push('Traffic and identity layers are unsupported by design for this event_only site.');
   } else if (
     (typeof requests7d === 'number' && requests7d > 0) ||
     (typeof visits7d === 'number' && visits7d > 0)
@@ -667,6 +732,28 @@ function formatSiteReport(report: SiteLighthouseReport): string {
     readLines.push('Path/source/referrer attribution is being reported from event telemetry.');
   }
 
+  const positiveBreakdownEntries = byEventName
+    ? Object.entries(byEventName).filter(
+        ([, count]) => typeof count === 'number' && count > 0,
+      )
+    : [];
+  const nonPageViewBreakdownEntries = positiveBreakdownEntries.filter(([name]) => name !== 'page_view');
+  const hasAttributionLists =
+    (report.events?.top_sources?.length ?? 0) > 0 ||
+    (report.events?.top_campaigns?.length ?? 0) > 0 ||
+    (report.events?.top_referrers?.length ?? 0) > 0 ||
+    (topPaths?.length ?? 0) > 0;
+
+  if (
+    isEventOnlySite &&
+    typeof pageViewEvents7d === 'number' &&
+    pageViewEvents7d > 0 &&
+    nonPageViewBreakdownEntries.length === 0 &&
+    !hasAttributionLists
+  ) {
+    readLines.push('Only page_view is currently reported; broader funnel events are not present in this payload.');
+  }
+
   if (
     (typeof droppedInvalid === 'number' && droppedInvalid > 0) ||
     (typeof droppedRateLimited === 'number' && droppedRateLimited > 0)
@@ -683,7 +770,9 @@ function formatSiteReport(report: SiteLighthouseReport): string {
   }
 
   if (!report.identity) {
-    readLines.push('Identity-layer telemetry is shown only when Lighthouse provides Layer 4 support for this site.');
+    if (!isEventOnlySite) {
+      readLines.push('Identity-layer telemetry is shown only when Lighthouse provides Layer 4 support for this site.');
+    }
   } else {
     readLines.push('Identity-layer reporting is available for this site because Lighthouse provides Layer 4 support.');
   }
@@ -710,24 +799,32 @@ function formatSiteReport(report: SiteLighthouseReport): string {
       ? `- Signal state: ${typeof report.summary.has_recent_signal === 'boolean' ? (report.summary.has_recent_signal ? 'recent' : 'stale') : 'unavailable'}`
       : undefined,
     '',
-    todaySection,
-    '',
-    '**Traffic**',
-    trafficUnsupportedByDesign
-      ? '- Traffic layer is not enabled for this site, so request/visit fields are unsupported.'
-      : trafficEnabled === true
-        ? '- Traffic layer is enabled for this site.'
-        : '- Traffic layer values reflect Lighthouse output when Layer 3 data is available.',
-    `- Cloudflare traffic enabled: ${formatNullableValue(report.traffic?.cloudflare_traffic_enabled)}`,
-    `- Requests 7d: ${formatNullableValue(report.traffic?.last_7_days?.requests)}`,
-    `- Visits 7d: ${formatNullableValue(report.traffic?.last_7_days?.visits)}`,
-    `- Avg daily requests: ${formatNullableValue(report.traffic?.last_7_days?.avg_daily_requests)}`,
-    `- Avg daily visits: ${formatNullableValue(report.traffic?.last_7_days?.avg_daily_visits)}`,
-    `- Days with data: ${formatNullableValue(report.traffic?.last_7_days?.days_with_data)}`,
-    '',
     eventsLines.join('\n'),
     '',
     healthLines.join('\n'),
+    ...(!isEventOnlySite || todayHasData ? ['', todaySection] : []),
+    ...(!isEventOnlySite ||
+    todayHasData ||
+    trafficEnabled === true ||
+    Boolean(report.traffic) ||
+    typeof requests7d === 'number' ||
+    typeof visits7d === 'number'
+      ? [
+          '',
+          '**Traffic**',
+          trafficUnsupportedByDesign
+            ? '- Traffic and identity layers are unsupported by design for this event_only site.'
+            : trafficEnabled === true
+              ? '- Traffic layer is enabled for this site.'
+              : '- Traffic layer values reflect Lighthouse output when Layer 3 data is available.',
+          `- Cloudflare traffic enabled: ${formatNullableValue(report.traffic?.cloudflare_traffic_enabled)}`,
+          `- Requests 7d: ${formatNullableValue(report.traffic?.last_7_days?.requests)}`,
+          `- Visits 7d: ${formatNullableValue(report.traffic?.last_7_days?.visits)}`,
+          `- Avg daily requests: ${formatNullableValue(report.traffic?.last_7_days?.avg_daily_requests)}`,
+          `- Avg daily visits: ${formatNullableValue(report.traffic?.last_7_days?.avg_daily_visits)}`,
+          `- Days with data: ${formatNullableValue(report.traffic?.last_7_days?.days_with_data)}`,
+        ]
+      : []),
     ...(identityBlock.length > 0 ? ['', identityBlock.join('\n')] : []),
     '',
     '**Read**',

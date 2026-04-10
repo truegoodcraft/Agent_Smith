@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.10.0] — 2026-04-10
+
+### Changed
+
+*   **Event-only site reports are now event-first for operator usefulness**: Normalized `event_only` reports now prioritize real event telemetry visibility (`page_view`, attribution lists, event-name breakdown, observability) so Star Map/TGC reads emphasize current signal instead of sparse layer gaps.
+*   **`page_view` signal promoted explicitly**: Site event sections now surface `page_view events 7d` prominently and continue to show accepted-event metrics separately without collapsing field semantics.
+*   **Attribution output made clearer under current Lighthouse payload reality**: Smith now renders available top sources/campaigns/referrers (and top paths when provided), while handling missing attribution lists with compact payload-aware wording.
+*   **Only-`page_view` cases now called out directly**: When event payloads indicate only `page_view` without broader funnel signals, report read-lines state that clearly for operator interpretation.
+*   **Unsupported traffic/identity messaging compacted**: Event-only reports now use a concise unsupported-by-design note instead of repeating unavailable framing across multiple sections.
+
 ## [0.9.0] — 2026-04-10
 
 ### Changed

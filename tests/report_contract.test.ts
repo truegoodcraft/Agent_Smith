@@ -534,9 +534,9 @@ test('report site:tgc_site uses normalized site view', async () => {
       assert.match(String(content), /Report · TGC Site · 7d/);
       assert.match(String(content), /\*\*Event Telemetry\*\*/);
       assert.match(String(content), /Support class: event_only/);
-      assert.match(String(content), /Traffic layer is not enabled for this site, so request\/visit fields are unsupported/);
+      assert.match(String(content), /Traffic and identity layers are unsupported by design for this event_only site/);
       assert.match(String(content), /Event telemetry is active for this site \(2 accepted in 7d\)/);
-      assert.match(String(content), /Identity-layer telemetry is shown only when Lighthouse provides Layer 4 support/);
+      assert.match(String(content), /page_view events 7d: unavailable/);
     },
   );
 });
@@ -577,7 +577,11 @@ test('report site:star_map_generator uses normalized site view', async () => {
       assert.match(String(content), /Report · Star Map Generator · 7d/);
       assert.match(String(content), /\*\*Event Telemetry\*\*/);
       assert.match(String(content), /Support class: event_only/);
+      assert.match(String(content), /page_view events 7d: 3/);
+      assert.match(String(content), /Top Sources:/);
+      assert.match(String(content), /Top Referrers:/);
       assert.match(String(content), /Path\/source\/referrer attribution is being reported from event telemetry/);
+      assert.match(String(content), /Traffic and identity layers are unsupported by design for this event_only site/);
     },
   );
 });
@@ -674,12 +678,51 @@ test('site report events section displays event details when present', () => {
   assert.match(output, /\*\*Event Telemetry\*\*/);
   assert.match(output, /By Event Name:/);
   assert.match(output, /click \(30\)/);
-  assert.match(output, /Top sources:/);
+  assert.match(output, /Top Sources:/);
   assert.match(output, /github \(25\)/);
-  assert.match(output, /Top campaigns:/);
+  assert.match(output, /Top Campaigns:/);
   assert.match(output, /spring_launch \(40\)/);
-  assert.match(output, /Top referrers:/);
+  assert.match(output, /Top Referrers:/);
   assert.match(output, /example.com \(35\)/);
+});
+
+test('event_only site clearly states when only page_view is present', () => {
+  const payload = {
+    view: 'site' as const,
+    generated_at: '2026-04-10T00:00:00Z',
+    scope: {
+      site_key: 'star_map_generator',
+      label: 'Star Map Generator',
+      backend_source: 'lighthouse',
+      cloudflare_traffic_enabled: false,
+    },
+    summary: {
+      pageviews_7d: 11,
+      requests_7d: null,
+      visits_7d: null,
+      accepted_events_7d: 11,
+    },
+    traffic: null,
+    events: {
+      accepted_signal_7d: 11,
+      accepted_events: 11,
+      by_event_name: { page_view: 11 },
+      top_sources: null,
+      top_campaigns: null,
+      top_referrers: null,
+    },
+    health: {
+      dropped_invalid: 0,
+      dropped_rate_limited: 0,
+    },
+  };
+
+  const parsed = normalizeSiteLighthouseReport(payload);
+  assert.ok(parsed);
+
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /page_view events 7d: 11/);
+  assert.match(output, /Only page_view is currently reported; broader funnel events are not present in this payload/);
 });
 
 test('site report health section displays all observability fields when present', () => {

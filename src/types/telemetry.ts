@@ -171,6 +171,12 @@ export interface SiteReportEventTopItem {
   count: number;
 }
 
+export interface SiteReportPathItem {
+  path: string;
+  pageviews?: number | null;
+  count?: number | null;
+}
+
 export interface SiteReportEventsByName {
   [eventName: string]: number;
 }
@@ -181,6 +187,7 @@ export interface SiteReportEvents {
   has_recent_signal?: boolean | null;
   last_received_at?: string | null;
   unique_paths?: number | null;
+  top_paths?: SiteReportPathItem[] | null;
   by_event_name?: SiteReportEventsByName | null;
   top_sources?: SiteReportEventTopItem[] | null;
   top_campaigns?: SiteReportEventTopItem[] | null;
@@ -730,6 +737,23 @@ function normalizeSiteReportEvents(data: unknown): SiteReportEvents | null {
     ? (data.by_event_name as SiteReportEventsByName)
     : undefined;
 
+  const normalizeTopPaths = (items: unknown): SiteReportPathItem[] | undefined => {
+    if (!Array.isArray(items)) {
+      return undefined;
+    }
+
+    const normalized = items
+      .filter((item): item is Record<string, unknown> => isRecord(item))
+      .filter((item) => typeof item.path === 'string')
+      .map((item) => ({
+        path: item.path as string,
+        pageviews: isNullableNumber(item.pageviews) ? item.pageviews : undefined,
+        count: isNullableNumber(item.count) ? item.count : undefined,
+      }));
+
+    return normalized.length > 0 ? normalized : undefined;
+  };
+
   const normalizeEventTopItems = (items: unknown): SiteReportEventTopItem[] | undefined => {
     if (!Array.isArray(items)) {
       return undefined;
@@ -750,6 +774,7 @@ function normalizeSiteReportEvents(data: unknown): SiteReportEvents | null {
         : undefined,
     last_received_at: lastReceivedAt,
     unique_paths: isNullableNumber(data.unique_paths) ? data.unique_paths : undefined,
+    top_paths: normalizeTopPaths(data.top_paths),
     by_event_name: byEventName,
     top_sources: normalizeEventTopItems(data.top_sources),
     top_campaigns: normalizeEventTopItems(data.top_campaigns),

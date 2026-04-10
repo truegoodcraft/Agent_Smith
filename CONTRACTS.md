@@ -84,14 +84,15 @@ Operator-first deterministic report for all tracked sites or one selected site f
 - **Deterministic output expectations**:
   - Fleet/all-sites formatting is sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`.
   - `site:buscore` is a permitted legacy-rich exception at the report-consumption layer and uses legacy section flow: `Report · OK · 7d`, `Summary`, `Today`, `Traffic`, `Human Traffic`, `Observability`, `Identity`, `Read` (`Identity` is optional).
-  - Site formatting follows canonical normalized per-site flow: `Report · <Site Label> · 7d`, `Summary`, `Today`, `Traffic`, `Event Telemetry`, `Observability`, `Identity`, `Read` (`Identity` is optional).
+  - Site formatting follows canonical normalized per-site flow: `Report · <Site Label> · 7d`, `Summary`, `Event Telemetry`, `Attribution`, `Observability`, `Today` (only when meaningful), `Traffic`, `Identity`, `Read` (`Identity` is optional).
   - Normalized site summary includes support-class framing where Smith has authoritative site-class knowledge.
-  - For `event_only` sites, event telemetry output is prioritized and should prominently surface `page_view` count, attribution lists present in the payload, event-name breakdown, and observability before optional traffic-layer detail.
+  - For `event_only` sites, event telemetry output is prioritized and should prominently surface `accepted_events_7d`, `page_view` count, event-name breakdown, top paths, top sources, top campaigns, top referrers, and observability before optional traffic-layer detail.
   - Section naming and content do not imply telemetry parity between support classes.
   - Site read-lines should preserve the distinction between Layer 2 page/event attribution and Layer 3 traffic metrics.
   - Site read-lines should not imply that missing traffic or identity layers are defects when the site does not support them.
   - Event-only sites should describe unsupported traffic and identity layers as unsupported by design when Lighthouse does not provide those layers.
-  - Event-only sites should use one compact unsupported-by-design note for traffic/identity layers rather than repeating unavailable language across multiple sections.
+  - Event-only sites should use one compact support-class note and one brief unsupported traffic/identity note rather than repeating unavailable language across multiple sections.
+  - When Lighthouse provides `events.by_event_name`, `events.top_paths`, `events.top_sources`, `events.top_campaigns`, or `events.top_referrers`, Smith must render them and must not substitute `unavailable` or attribution-missing fallback text.
   - Source health formatting reports telemetry integrity values only and avoids noisy unavailable signal-state fields.
   - `null` values must render as unavailable and must not be coerced to `0`.
   - `accepted_signal_7d` is treated as a numeric count and rendered accordingly.

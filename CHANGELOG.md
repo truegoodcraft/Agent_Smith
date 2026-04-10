@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.1] — 2026-04-10
+
+### Fixed
+
+*   **Star Map/TGC normalized site reports now preserve event attribution fields during parsing**: Smith now keeps `events.top_paths` through normalization instead of dropping it before formatting, so one-path Star Map payloads remain visible in report output.
+*   **Event-only site formatting no longer hides usable telemetry behind fallback spam**: Normalized one-site output now separates `Event Telemetry` from `Attribution`, renders event-name breakdowns and attribution lists whenever Lighthouse provides them, and reserves `unavailable` for truly absent values only.
+*   **Summary and observability now use the best available site-level event aliases**: `accepted_events_7d`, `page_view`, last-received, and signal-state values now fall back across summary/event/health scope without mislabeling present telemetry as missing.
+*   **Unsupported traffic/identity language compacted to one brief note**: `event_only` reports now keep a single short support-layer note plus one brief unsupported traffic section line rather than repeating unsupported wording across the report.
+
+### Added
+
+*   **Regression coverage for Star Map event output cleanup**: Added tests proving `page_view`, extension events like `preview_generated`, top paths, top sources, top campaigns, top referrers, event-name breakdowns, and true-absence-only `unavailable` behavior all render correctly for normalized site reports.
+
 ## [0.10.0] — 2026-04-10
 
 ### Changed

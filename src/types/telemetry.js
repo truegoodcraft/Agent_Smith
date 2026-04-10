@@ -373,6 +373,20 @@ function normalizeSiteReportEvents(data) {
     const byEventName = isRecord(data.by_event_name)
         ? data.by_event_name
         : undefined;
+    const normalizeTopPaths = (items) => {
+        if (!Array.isArray(items)) {
+            return undefined;
+        }
+        const normalized = items
+            .filter((item) => isRecord(item))
+            .filter((item) => typeof item.path === 'string')
+            .map((item) => ({
+            path: item.path,
+            pageviews: isNullableNumber(item.pageviews) ? item.pageviews : undefined,
+            count: isNullableNumber(item.count) ? item.count : undefined,
+        }));
+        return normalized.length > 0 ? normalized : undefined;
+    };
     const normalizeEventTopItems = (items) => {
         if (!Array.isArray(items)) {
             return undefined;
@@ -391,6 +405,7 @@ function normalizeSiteReportEvents(data) {
             : undefined,
         last_received_at: lastReceivedAt,
         unique_paths: isNullableNumber(data.unique_paths) ? data.unique_paths : undefined,
+        top_paths: normalizeTopPaths(data.top_paths),
         by_event_name: byEventName,
         top_sources: normalizeEventTopItems(data.top_sources),
         top_campaigns: normalizeEventTopItems(data.top_campaigns),

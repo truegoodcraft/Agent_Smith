@@ -163,7 +163,7 @@ test('parses site alias fields without dropping values', () => {
   const output = formatLighthouseReport(parsed);
   assert.match(output, /Cloudflare traffic enabled: true/);
   assert.match(output, /Accepted signal 7d: 3/);
-  assert.match(output, /Last signal received: 2026-04-08T20:05:07.704Z/);
+  assert.match(output, /Last received: 2026-04-08T20:05:07.704Z/);
 });
 
 test('parses source health response payload', () => {
@@ -533,8 +533,10 @@ test('report site:tgc_site uses normalized site view', async () => {
       assert.match(requestedUrl, /site_key=tgc_site/);
       assert.match(String(content), /Report · TGC Site · 7d/);
       assert.match(String(content), /\*\*Event Telemetry\*\*/);
+      assert.match(String(content), /\*\*Attribution\*\*/);
       assert.match(String(content), /Support class: event_only/);
-      assert.match(String(content), /Traffic and identity layers are unsupported by design for this event_only site/);
+      assert.match(String(content), /Traffic\/identity: unsupported by design unless Lighthouse adds those layers/);
+      assert.match(String(content), /\*\*Traffic\*\*[\s\S]*Unsupported by design for this event_only site/);
       assert.match(String(content), /Event telemetry is active for this site \(2 accepted in 7d\)/);
       assert.match(String(content), /page_view events 7d: unavailable/);
     },
@@ -562,7 +564,10 @@ test('report site:star_map_generator uses normalized site view', async () => {
           has_recent_signal: true,
           last_received_at: '2026-04-08T00:00:00Z',
           unique_paths: 2,
+          top_paths: [{ path: '/create', count: 1 }],
+          by_event_name: { page_view: 3, preview_generated: 1 },
           top_sources: [{ name: 'github', count: 1 }],
+          top_campaigns: [{ name: 'starmap_launch', count: 1 }],
           top_referrers: [{ name: 'example.com', count: 1 }],
         },
         health: { dropped_invalid: 0, dropped_rate_limited: 0 },
@@ -576,12 +581,16 @@ test('report site:star_map_generator uses normalized site view', async () => {
       assert.match(requestedUrl, /site_key=star_map_generator/);
       assert.match(String(content), /Report · Star Map Generator · 7d/);
       assert.match(String(content), /\*\*Event Telemetry\*\*/);
+      assert.match(String(content), /\*\*Attribution\*\*/);
       assert.match(String(content), /Support class: event_only/);
       assert.match(String(content), /page_view events 7d: 3/);
+      assert.match(String(content), /preview_generated \(1\)/);
+      assert.match(String(content), /Top Paths:/);
       assert.match(String(content), /Top Sources:/);
+      assert.match(String(content), /Top Campaigns:/);
       assert.match(String(content), /Top Referrers:/);
       assert.match(String(content), /Path\/source\/referrer attribution is being reported from event telemetry/);
-      assert.match(String(content), /Traffic and identity layers are unsupported by design for this event_only site/);
+      assert.match(String(content), /Traffic\/identity: unsupported by design unless Lighthouse adds those layers/);
     },
   );
 });
@@ -644,7 +653,7 @@ test('site report events section displays event details when present', () => {
     view: 'site' as const,
     generated_at: '2026-04-08T00:00:00Z',
     scope: { site_key: 'star_map_generator', label: 'Star Map Generator' },
-    summary: null,
+    summary: { accepted_events_7d: 50, pageviews_7d: 18 },
     traffic: null,
     events: {
       accepted_signal_7d: 50,
@@ -652,15 +661,16 @@ test('site report events section displays event details when present', () => {
       unique_paths: 12,
       has_recent_signal: true,
       last_received_at: '2026-04-08T20:01:00Z',
-      by_event_name: { click: 30, view: 18 },
+      top_paths: [{ path: '/generator', count: 18 }],
+      by_event_name: { page_view: 18, preview_generated: 12, click: 30 },
       top_sources: [
-        { name: 'github', count: 25 },
-        { name: 'twitter', count: 15 },
+        { name: 'reddit', count: 25 },
+        { name: 'pinterest', count: 15 },
       ],
-      top_campaigns: [{ name: 'spring_launch', count: 40 }],
-      top_referrers: [{ name: 'example.com', count: 35 }],
+      top_campaigns: [{ name: 'starmap_launch', count: 40 }],
+      top_referrers: [{ name: 'pinterest.com', count: 35 }],
     },
-    health: null,
+    health: { included_events: 48, dropped_invalid: 0, dropped_rate_limited: 0 },
   };
 
   const parsed = normalizeSiteLighthouseReport(payload);
@@ -668,22 +678,35 @@ test('site report events section displays event details when present', () => {
   assert.equal(parsed.events?.accepted_signal_7d, 50);
   assert.equal(parsed.events?.accepted_events, 48);
   assert.equal(parsed.events?.unique_paths, 12);
+  assert.equal(parsed.events?.top_paths?.[0].path, '/generator');
   assert.ok(parsed.events?.by_event_name);
   assert.equal(parsed.events.by_event_name.click, 30);
 
   const output = formatLighthouseReport(parsed);
+  assert.ok(output.indexOf('**Summary**') < output.indexOf('**Event Telemetry**'));
+  assert.ok(output.indexOf('**Event Telemetry**') < output.indexOf('**Attribution**'));
+  assert.ok(output.indexOf('**Attribution**') < output.indexOf('**Observability**'));
+  assert.match(output, /Accepted events 7d: 50/);
+  assert.match(output, /page_view events 7d: 18/);
   assert.match(output, /Accepted signal 7d: 50/);
   assert.match(output, /Accepted events: 48/);
   assert.match(output, /Unique paths: 12/);
   assert.match(output, /\*\*Event Telemetry\*\*/);
-  assert.match(output, /By Event Name:/);
+  assert.match(output, /Event-name breakdown:/);
+  assert.match(output, /page_view \(18\)/);
+  assert.match(output, /preview_generated \(12\)/);
   assert.match(output, /click \(30\)/);
+  assert.match(output, /\*\*Attribution\*\*/);
+  assert.match(output, /Top Paths:/);
+  assert.match(output, /\/generator \(18\)/);
   assert.match(output, /Top Sources:/);
-  assert.match(output, /github \(25\)/);
+  assert.match(output, /reddit \(25\)/);
   assert.match(output, /Top Campaigns:/);
-  assert.match(output, /spring_launch \(40\)/);
+  assert.match(output, /starmap_launch \(40\)/);
   assert.match(output, /Top Referrers:/);
-  assert.match(output, /example.com \(35\)/);
+  assert.match(output, /pinterest.com \(35\)/);
+  assert.doesNotMatch(output, /Attribution lists were not provided/);
+  assert.doesNotMatch(output, /Event-name breakdown: unavailable/);
 });
 
 test('event_only site clearly states when only page_view is present', () => {
@@ -722,7 +745,10 @@ test('event_only site clearly states when only page_view is present', () => {
 
   const output = formatLighthouseReport(parsed);
   assert.match(output, /page_view events 7d: 11/);
+  assert.match(output, /Event-name breakdown:/);
+  assert.match(output, /page_view \(11\)/);
   assert.match(output, /Only page_view is currently reported; broader funnel events are not present in this payload/);
+  assert.doesNotMatch(output, /Path\/source\/referrer attribution is being reported from event telemetry/);
 });
 
 test('site report health section displays all observability fields when present', () => {
@@ -887,8 +913,7 @@ test('null event details render as unavailable, not as zeros or dropped', () => 
   const output = formatLighthouseReport(parsed);
   assert.match(output, /Accepted signal 7d: 0/);
   assert.match(output, /Accepted events: unavailable/);
-  assert.match(output, /Unique paths: unavailable/);
-  assert.doesNotMatch(output, /By Event Name:/);
-  assert.doesNotMatch(output, /Top sources:/);
+  assert.match(output, /Event-name breakdown: unavailable/);
+  assert.match(output, /\*\*Attribution\*\*[\s\S]*- unavailable/);
 });
 

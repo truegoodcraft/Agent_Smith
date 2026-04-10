@@ -2,9 +2,21 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.10.0 — event_only operator usefulness pass)
+## Current Mission (v0.10.1 — event_only report cleanup fix)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+**[v0.10.1 Event-Only Report Cleanup Fix]** Smith normalized one-site reporting now preserves and surfaces usable Lighthouse event telemetry for `event_only` sites instead of dropping or drowning it in fallback wording.
+
+Active event-only rendering rules now include:
+
+- Section order: `Summary`, `Event Telemetry`, `Attribution`, `Observability`, `Today` (only when meaningful), `Traffic`, `Read`
+- `accepted_events_7d` leads the summary and event telemetry output using the best available summary/event alias source.
+- Event-name breakdown renders whenever `events.by_event_name` is present, including extension events such as `preview_generated`.
+- Top paths render whenever `events.top_paths` is present, even when there is only one path.
+- Top sources, top campaigns, and top referrers render whenever Lighthouse provides those attribution lists.
+- `unavailable` is reserved for truly absent values; Smith must not label useful event telemetry as unavailable when the payload contains it.
+- Support-class explanation is compact, and unsupported Layer 3/Layer 4 wording is limited to one short note instead of repeated report spam.
 
 **[v0.10.0 Event-Only Operator Usefulness]** Smith normalized one-site reporting now prioritizes current event telemetry data for `event_only` properties so Star Map/TGC outputs are more operator-useful for real eyes and attribution.
 

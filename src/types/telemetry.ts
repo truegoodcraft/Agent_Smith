@@ -138,6 +138,8 @@ export interface SiteReportScope {
   label?: string | null;
   backend_source?: string | null;
   cloudflare_traffic_enabled?: boolean | null;
+  production_only?: boolean | null;
+  section_availability?: Record<string, boolean | null>;
 }
 
 export interface SiteReportSummary {
@@ -192,6 +194,7 @@ export interface SiteReportEvents {
   top_sources?: SiteReportEventTopItem[] | null;
   top_campaigns?: SiteReportEventTopItem[] | null;
   top_referrers?: SiteReportEventTopItem[] | null;
+  top_contents?: SiteReportEventTopItem[] | null;
 }
 
 export interface SiteReportHealth {
@@ -636,11 +639,25 @@ function normalizeSiteReportScope(data: unknown): SiteReportScope | null {
     'traffic_enabled',
   ]);
 
+  const sectionAvailability = isRecord(data.section_availability)
+    ? Object.fromEntries(
+        Object.entries(data.section_availability)
+          .filter(([, value]) => typeof value === 'boolean' || value === null)
+          .map(([key, value]) => [key, value as boolean | null]),
+      )
+    : undefined;
+
   return {
     site_key: isNullableString(data.site_key) ? data.site_key : undefined,
     label: isNullableString(data.label) ? data.label : undefined,
     backend_source: isNullableString(data.backend_source) ? data.backend_source : undefined,
     cloudflare_traffic_enabled: cloudflareTrafficEnabled,
+    production_only:
+      typeof data.production_only === 'boolean' || data.production_only === null
+        ? data.production_only
+        : undefined,
+    section_availability:
+      sectionAvailability && Object.keys(sectionAvailability).length > 0 ? sectionAvailability : undefined,
   };
 }
 
@@ -734,7 +751,9 @@ function normalizeSiteReportEvents(data: unknown): SiteReportEvents | null {
   const lastReceivedAt = getNullableStringFromAliases(data, 'last_received_at', ['last_received']);
 
   const byEventName: SiteReportEventsByName | undefined = isRecord(data.by_event_name)
-    ? (data.by_event_name as SiteReportEventsByName)
+    ? Object.fromEntries(
+        Object.entries(data.by_event_name).filter(([, value]) => typeof value === 'number'),
+      ) as SiteReportEventsByName
     : undefined;
 
   const normalizeTopPaths = (items: unknown): SiteReportPathItem[] | undefined => {
@@ -751,35 +770,84 @@ function normalizeSiteReportEvents(data: unknown): SiteReportEvents | null {
         count: isNullableNumber(item.count) ? item.count : undefined,
       }));
 
-    return normalized.length > 0 ? normalized : undefined;
+    return normalized;
   };
 
-  const normalizeEventTopItems = (items: unknown): SiteReportEventTopItem[] | undefined => {
+  const normalizeEventTopItems = (
+    items: unknown,
+    labelKeys: string[] = ['name'],
+  ): SiteReportEventTopItem[] | undefined => {
     if (!Array.isArray(items)) {
       return undefined;
     }
+
     const normalized = items
       .filter((item): item is Record<string, unknown> => isRecord(item))
-      .filter((item) => typeof item.name === 'string' && typeof item.count === 'number')
-      .map((item) => ({ name: item.name as string, count: item.count as number }));
-    return normalized.length > 0 ? normalized : undefined;
+      .map((item) => {
+        const label = labelKeys
+          .map((key) => item[key])
+          .find((value): value is string => typeof value === 'string');
+        const count =
+          typeof item.count === 'number'
+            ? item.count
+            : typeof item.pageviews === 'number'
+              ? item.pageviews
+              : undefined;
+
+        if (!label || typeof count !== 'number') {
+          return null;
+        }
+
+        return { name: label, count };
+      })
+      .filter((item): item is SiteReportEventTopItem => item !== null);
+
+    return normalized;
   };
 
-  return {
-    accepted_signal_7d: acceptedSignal7d,
-    accepted_events: isNullableNumber(data.accepted_events) ? data.accepted_events : undefined,
-    has_recent_signal:
-      typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null
-        ? data.has_recent_signal
-        : undefined,
-    last_received_at: lastReceivedAt,
-    unique_paths: isNullableNumber(data.unique_paths) ? data.unique_paths : undefined,
-    top_paths: normalizeTopPaths(data.top_paths),
-    by_event_name: byEventName,
-    top_sources: normalizeEventTopItems(data.top_sources),
-    top_campaigns: normalizeEventTopItems(data.top_campaigns),
-    top_referrers: normalizeEventTopItems(data.top_referrers),
-  };
+  const normalizedTopPaths = normalizeTopPaths(data.top_paths);
+  const normalizedTopSources = normalizeEventTopItems(data.top_sources, ['name', 'source']);
+  const normalizedTopCampaigns = normalizeEventTopItems(data.top_campaigns, ['name', 'campaign']);
+  const normalizedTopReferrers = normalizeEventTopItems(data.top_referrers, ['name', 'referrer_domain']);
+  const normalizedTopContents = normalizeEventTopItems(data.top_contents, ['name', 'content']);
+
+  const result: SiteReportEvents = {};
+
+  if (acceptedSignal7d !== undefined) {
+    result.accepted_signal_7d = acceptedSignal7d;
+  }
+  if (isNullableNumber(data.accepted_events)) {
+    result.accepted_events = data.accepted_events;
+  }
+  if (typeof data.has_recent_signal === 'boolean' || data.has_recent_signal === null) {
+    result.has_recent_signal = data.has_recent_signal;
+  }
+  if (lastReceivedAt !== undefined) {
+    result.last_received_at = lastReceivedAt;
+  }
+  if (isNullableNumber(data.unique_paths)) {
+    result.unique_paths = data.unique_paths;
+  }
+  if (Array.isArray(data.top_paths)) {
+    result.top_paths = normalizedTopPaths ?? [];
+  }
+  if (isRecord(data.by_event_name)) {
+    result.by_event_name = byEventName ?? {};
+  }
+  if (Array.isArray(data.top_sources)) {
+    result.top_sources = normalizedTopSources ?? [];
+  }
+  if (Array.isArray(data.top_campaigns)) {
+    result.top_campaigns = normalizedTopCampaigns ?? [];
+  }
+  if (Array.isArray(data.top_referrers)) {
+    result.top_referrers = normalizedTopReferrers ?? [];
+  }
+  if (Array.isArray(data.top_contents)) {
+    result.top_contents = normalizedTopContents ?? [];
+  }
+
+  return result;
 }
 
 function normalizeSiteReportHealth(data: unknown): SiteReportHealth | null {

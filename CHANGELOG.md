@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.2] — 2026-04-10
+
+### Fixed
+
+*   **Normalized site reports now preserve empty-vs-absent attribution semantics**: Site event list normalization keeps explicitly empty arrays (`[]`) as empty scope results instead of collapsing them to absent values, preventing misleading `unavailable` wording.
+*   **Production-only scope is now explicit in one-site report output**: Summary/observability/read sections now clearly state production-only scope and surface `excluded_non_production_host` as a direct explanation when rows are filtered out.
+*   **Attribution fallback language now distinguishes unsupported, unavailable, and empty**: Event-only attribution output now differentiates unsupported scope, unavailable fields, and empty current scope, including production-filter-specific guidance when applicable.
+*   **Top content attribution is now rendered when Lighthouse provides it**: Normalized events now parse and render `events.top_contents` alongside top paths/sources/campaigns/referrers.
+
+### Added
+
+*   **Contract test coverage for production-filter clarity and empty-array semantics**: Added tests verifying explicit production-only wording, excluded-host explanations, top-contents rendering, and empty attribution arrays rendering as empty scope rather than unavailable.
+
 ## [0.10.1] — 2026-04-10
 
 ### Fixed

@@ -2,9 +2,19 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.10.1 — event_only report cleanup fix)
+## Current Mission (v0.10.2 — production-scope rendering clarity)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+**[v0.10.2 Production-Scope Rendering Clarity]** Smith normalized one-site reporting now preserves empty-vs-absent event breakdown semantics and makes production filtering explicit so empty attribution lists are no longer mysterious.
+
+Active production-scope and attribution clarity rules now include:
+
+- `events.top_contents` is accepted and rendered when Lighthouse provides it.
+- `events.by_event_name`, `events.top_paths`, `events.top_sources`, `events.top_campaigns`, `events.top_referrers`, and `events.top_contents` keep empty-array/empty-object semantics when explicitly present.
+- `unavailable` is used for absent/unsupported fields; explicitly present empty breakdown lists render as empty current-scope results, not unavailable.
+- Production filtering state is made explicit using site scope/health fields (including `production_only` and `excluded_non_production_host` when present).
+- Event-only read lines now include explicit production-filter guidance when attribution is empty under production-only scope.
 
 **[v0.10.1 Event-Only Report Cleanup Fix]** Smith normalized one-site reporting now preserves and surfaces usable Lighthouse event telemetry for `event_only` sites instead of dropping or drowning it in fallback wording.
 

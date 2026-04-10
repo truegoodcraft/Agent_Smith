@@ -33,7 +33,9 @@ Advanced compatibility path (secondary):
 
 All-sites output is deterministic and sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`. One-site output follows the canonical normalized per-site section flow (`Summary`, `Event Telemetry`, `Attribution`, `Observability`, `Today` when meaningful, `Traffic`, `Identity`, `Read`; `Identity` remains optional). Nulls are rendered as unavailable and are not rewritten to zero.
 
-For `event_only` sites (including Star Map and TGC Site), Smith now prioritizes event telemetry usefulness in the one-site output: `accepted_events_7d`, `page_view` count, event-name breakdown, attribution lists (top paths when provided, top sources, top campaigns, top referrers), and observability. Traffic/identity layer status is kept to one compact support-class note plus one brief unsupported traffic line instead of repeated unavailable-only phrasing.
+For `event_only` sites (including Star Map and TGC Site), Smith now prioritizes event telemetry usefulness in the one-site output: `accepted_events_7d`, `page_view` count, event-name breakdown, attribution lists (top paths when provided, top sources, top campaigns, top referrers, top contents), and observability. Traffic/identity layer status is kept to one compact support-class note plus one brief unsupported traffic line instead of repeated unavailable-only phrasing.
+
+Production-host filtering is rendered explicitly when available: Smith states when report scope is production-only, surfaces `excluded_non_production_host` counts, and distinguishes unsupported/absent fields from explicitly empty attribution lists in the current filtered scope.
 
 BUS Core remains the allowed legacy-rich exception at the report-consumption layer: `/report site:buscore` uses Lighthouse legacy `/report`, while `/report site:tgc_site` and `/report site:star_map_generator` stay on the normalized site-view path with null-honest rendering.
 

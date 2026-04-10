@@ -669,6 +669,7 @@ test('site report events section displays event details when present', () => {
       ],
       top_campaigns: [{ name: 'starmap_launch', count: 40 }],
       top_referrers: [{ name: 'pinterest.com', count: 35 }],
+      top_contents: [{ name: 'hero_banner', count: 22 }],
     },
     health: { included_events: 48, dropped_invalid: 0, dropped_rate_limited: 0 },
   };
@@ -705,8 +706,84 @@ test('site report events section displays event details when present', () => {
   assert.match(output, /starmap_launch \(40\)/);
   assert.match(output, /Top Referrers:/);
   assert.match(output, /pinterest.com \(35\)/);
+  assert.match(output, /Top Contents:/);
+  assert.match(output, /hero_banner \(22\)/);
   assert.doesNotMatch(output, /Attribution lists were not provided/);
   assert.doesNotMatch(output, /Event-name breakdown: unavailable/);
+});
+
+test('site report preserves empty attribution arrays as empty scope, not unavailable', () => {
+  const payload = {
+    view: 'site' as const,
+    generated_at: '2026-04-10T00:00:00Z',
+    scope: {
+      site_key: 'star_map_generator',
+      label: 'Star Map Generator',
+      production_only: true,
+    },
+    summary: { accepted_events_7d: 4, pageviews_7d: 4 },
+    traffic: null,
+    events: {
+      accepted_signal_7d: 4,
+      by_event_name: {},
+      top_paths: [],
+      top_sources: [],
+      top_campaigns: [],
+      top_referrers: [],
+      top_contents: [],
+    },
+    health: {
+      excluded_non_production_host: 3,
+      production_only_default: true,
+    },
+  };
+
+  const parsed = normalizeSiteLighthouseReport(payload);
+  assert.ok(parsed);
+  assert.deepEqual(parsed.events?.top_paths, []);
+  assert.deepEqual(parsed.events?.top_sources, []);
+  assert.deepEqual(parsed.events?.top_contents, []);
+
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /Event-name breakdown: empty in current scope/);
+  assert.match(output, /Attribution lists are empty in the current production-only scope/);
+  assert.match(output, /Non-production host rows were excluded: 3/);
+  assert.match(output, /Useful event rows may exist outside the current production-only filter/);
+  assert.doesNotMatch(output, /\*\*Attribution\*\*[\s\S]*- unavailable/);
+});
+
+test('production filter wording is explicit when scope is production-only', () => {
+  const payload = {
+    view: 'site' as const,
+    generated_at: '2026-04-10T00:00:00Z',
+    scope: {
+      site_key: 'tgc_site',
+      label: 'TGC Site',
+      production_only: true,
+      section_availability: {
+        traffic: false,
+      },
+    },
+    summary: {
+      accepted_events_7d: 2,
+    },
+    traffic: null,
+    events: {
+      accepted_signal_7d: 2,
+      top_sources: [],
+    },
+    health: {
+      excluded_non_production_host: 1,
+      production_only_default: true,
+    },
+  };
+
+  const parsed = normalizeSiteLighthouseReport(payload);
+  assert.ok(parsed);
+  const output = formatLighthouseReport(parsed);
+  assert.match(output, /Report scope is production-only/);
+  assert.match(output, /Non-production host rows were excluded: 1/);
+  assert.match(output, /\*\*Traffic\*\*[\s\S]*Unsupported by design for this event_only site/);
 });
 
 test('event_only site clearly states when only page_view is present', () => {

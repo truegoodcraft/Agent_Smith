@@ -64,7 +64,8 @@ function hasEventAttribution(report: SiteLighthouseReport): boolean {
       (report.events?.top_paths?.length ?? 0) > 0 ||
       (report.events?.top_sources?.length ?? 0) > 0 ||
       (report.events?.top_campaigns?.length ?? 0) > 0 ||
-      (report.events?.top_referrers?.length ?? 0) > 0,
+      (report.events?.top_referrers?.length ?? 0) > 0 ||
+      (report.events?.top_contents?.length ?? 0) > 0,
   );
 }
 
@@ -585,6 +586,12 @@ function formatSiteReport(report: SiteLighthouseReport): string {
     : undefined;
   const pageViewEvents7d = typeof pageviews7d === 'number' ? pageviews7d : pageViewFromByName;
   const topPaths = report.events?.top_paths;
+  const productionOnlyScope =
+    report.scope?.production_only ?? report.health?.production_only_default ?? undefined;
+  const excludedNonProductionHost = report.health?.excluded_non_production_host;
+  const sectionAvailability = report.scope?.section_availability;
+  const trafficUnsupportedByScope = sectionAvailability?.traffic === false;
+  const identityUnsupportedByScope = sectionAvailability?.identity === false;
   const trafficRequests7d = report.traffic?.last_7_days?.requests;
   const trafficVisits7d = report.traffic?.last_7_days?.visits;
   const trafficUnsupportedByDesign =
@@ -620,6 +627,8 @@ function formatSiteReport(report: SiteLighthouseReport): string {
 
     if (byEventNameBlock) {
       eventsLines.push(byEventNameBlock);
+    } else if (report.events && 'by_event_name' in report.events) {
+      eventsLines.push('- Event-name breakdown: empty in current scope');
     } else {
       eventsLines.push('- Event-name breakdown: unavailable');
     }
@@ -637,12 +646,31 @@ function formatSiteReport(report: SiteLighthouseReport): string {
     const topSourcesBlock = formatSiteEventsTopList('Top Sources:', report.events.top_sources);
     const topCampaignsBlock = formatSiteEventsTopList('Top Campaigns:', report.events.top_campaigns);
     const topReferrersBlock = formatSiteEventsTopList('Top Referrers:', report.events.top_referrers);
-    const attributionBlocks = [topPathsBlock, topSourcesBlock, topCampaignsBlock, topReferrersBlock].filter(
+    const topContentsBlock = formatSiteEventsTopList('Top Contents:', report.events.top_contents);
+    const attributionBlocks = [topPathsBlock, topSourcesBlock, topCampaignsBlock, topReferrersBlock, topContentsBlock].filter(
       Boolean,
     );
+    const attributionFieldsPresent =
+      'top_paths' in report.events ||
+      'top_sources' in report.events ||
+      'top_campaigns' in report.events ||
+      'top_referrers' in report.events ||
+      'top_contents' in report.events;
 
     if (attributionBlocks.length > 0) {
       attributionLines.push(...attributionBlocks);
+    } else if (attributionFieldsPresent) {
+      if (productionOnlyScope === true) {
+        attributionLines.push('- Attribution lists are empty in the current production-only scope.');
+        if (typeof excludedNonProductionHost === 'number' && excludedNonProductionHost > 0) {
+          attributionLines.push(`- Non-production host rows were excluded: ${excludedNonProductionHost}.`);
+          attributionLines.push('- Useful event rows may exist outside the current production-only filter.');
+        }
+      } else {
+        attributionLines.push('- Attribution lists are empty for the current scope (no matching rows).');
+      }
+    } else if (sectionAvailability?.attribution === false || sectionAvailability?.events === false) {
+      attributionLines.push('- unsupported for this site scope');
     } else {
       attributionLines.push('- unavailable');
     }
@@ -660,6 +688,12 @@ function formatSiteReport(report: SiteLighthouseReport): string {
     healthLines.push(`- Excluded non-prod host: ${formatNullableValue(report.health.excluded_non_production_host)}`);
     healthLines.push(`- Cloudflare traffic enabled: ${formatNullableValue(report.health.cloudflare_traffic_enabled)}`);
     healthLines.push(`- Production only default: ${formatNullableValue(report.health.production_only_default)}`);
+    if (productionOnlyScope === true) {
+      healthLines.push('- Report scope is production-only.');
+      if (typeof excludedNonProductionHost === 'number' && excludedNonProductionHost > 0) {
+        healthLines.push(`- Non-production host rows were excluded: ${excludedNonProductionHost}.`);
+      }
+    }
   } else if (report.events) {
     healthLines.push(`- Last received: ${formatNullableValue(report.events.last_received_at)}`);
     if (typeof report.events.has_recent_signal === 'boolean') {
@@ -738,6 +772,7 @@ function formatSiteReport(report: SiteLighthouseReport): string {
     (report.events?.top_sources?.length ?? 0) > 0 ||
     (report.events?.top_campaigns?.length ?? 0) > 0 ||
     (report.events?.top_referrers?.length ?? 0) > 0 ||
+    (report.events?.top_contents?.length ?? 0) > 0 ||
     (topPaths?.length ?? 0) > 0;
 
   if (
@@ -767,6 +802,16 @@ function formatSiteReport(report: SiteLighthouseReport): string {
 
   if (report.identity) {
     readLines.push('Identity-layer reporting is available for this site because Lighthouse provides Layer 4 support.');
+  } else if (isEventOnlySite && (identityUnsupportedByScope || productionOnlyScope === true)) {
+    readLines.push('Identity remains unsupported in this event_only scope.');
+  }
+
+  if (isEventOnlySite && productionOnlyScope === true && !hasAttributionLists) {
+    readLines.push('Attribution lists are empty in the current production-only scope.');
+    if (typeof excludedNonProductionHost === 'number' && excludedNonProductionHost > 0) {
+      readLines.push(`Non-production host rows were excluded: ${excludedNonProductionHost}.`);
+      readLines.push('Useful event rows may exist outside the current production-only filter.');
+    }
   }
 
   if (readLines.length === 0) {
@@ -781,6 +826,11 @@ function formatSiteReport(report: SiteLighthouseReport): string {
     `- Site key: ${formatNullableValue(report.scope?.site_key)}`,
     supportClass ? `- Support class: ${supportClass}` : undefined,
     isEventOnlySite ? '- Traffic/identity: unsupported by design unless Lighthouse adds those layers.' : undefined,
+    productionOnlyScope === true
+      ? '- Report scope is production-only.'
+      : productionOnlyScope === false
+        ? '- Report scope includes non-production hosts.'
+        : undefined,
     `- Backend source: ${formatNullableValue(report.scope?.backend_source)}`,
     `- Accepted events 7d: ${formatNullableValue(acceptedEvents7d)}`,
     `- page_view events 7d: ${formatNullableValue(pageViewEvents7d)}`,
@@ -802,8 +852,15 @@ function formatSiteReport(report: SiteLighthouseReport): string {
       ? [
           '',
           '**Traffic**',
-          ...(trafficUnsupportedByDesign
-            ? ['- Unsupported by design for this event_only site.']
+          ...(isEventOnlySite
+            ? [
+                trafficUnsupportedByDesign || trafficUnsupportedByScope
+                  ? '- Unsupported by design for this event_only site.'
+                  : '- Limited Layer 3 traffic metrics are present for this event_only site.',
+                `- Cloudflare traffic enabled: ${formatNullableValue(report.traffic?.cloudflare_traffic_enabled)}`,
+                `- Requests 7d: ${formatNullableValue(report.traffic?.last_7_days?.requests)}`,
+                `- Visits 7d: ${formatNullableValue(report.traffic?.last_7_days?.visits)}`,
+              ]
             : [
                 trafficEnabled === true
                   ? '- Traffic layer is enabled for this site.'

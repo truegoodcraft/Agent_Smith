@@ -2,9 +2,30 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.10.2 — production-scope rendering clarity)
+## Current Mission (v0.10.3 — policy authority alignment)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+**[v0.10.3 Policy Authority Alignment]** Smith docs/contracts/operator wording now treat the updated TGC Analytics Policy document (`TGC Analytics Policie.md`) as the governing language authority for analytics levels, support classes, capability layers, null honesty, and per-property expectations.
+
+Active v0.10.3 authority and expectation rules include:
+
+- TGC Analytics Policy is the company-level language and expectation authority.
+- Lighthouse remains telemetry/report-data authority.
+- Smith remains a read-only consumer/presenter and does not redefine telemetry architecture.
+- Company analytics levels in Smith wording are: `Page Level`, `Host Level`, `App Level`, `User Level`, `Internal`.
+- Shared comparable events remain: `page_view`, `outbound_click`, `contact_click`, `service_interest`.
+- Counted intent and non-counted public read wording remains distinct.
+- Host traffic wording remains distinct from page/app execution wording.
+- Global filter wording reflects `production_only` default true, `dev_mode` suppression standard, and null-honest unsupported metrics.
+
+Per-property wording contract now in force:
+
+- `buscore` stays `legacy_hybrid`, intentionally richer, and explicitly grandfathered as the richer exception.
+- `star_map_generator` stays `event_only` with `Page Level` analytics scope and capability layers `L1 yes / L2 yes / L3 no / L4 no / L5 yes`.
+- Star Map expected useful output remains `page_view`, extension events, top paths, top sources, top campaigns, top contents, top referrers.
+- Missing Star Map request/visit/identity metrics are unsupported by design and not treated as report failure.
+- `tgc_site` stays `event_only` with no traffic layer and no identity layer unless Lighthouse changes upstream.
 
 **[v0.10.2 Production-Scope Rendering Clarity]** Smith normalized one-site reporting now preserves empty-vs-absent event breakdown semantics and makes production filtering explicit so empty attribution lists are no longer mysterious.
 

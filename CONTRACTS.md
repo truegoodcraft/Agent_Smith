@@ -4,7 +4,13 @@ This document defines the canonical input/output contracts for Agent Smith's act
 
 Telemetry authority is Lighthouse. Smith is a read-only consumer and deterministic operator formatter.
 
-TGC analytics policy defines the company baseline analytics language. Smith uses that policy vocabulary when explaining report scope, but Smith does not redefine telemetry semantics.
+The updated TGC Analytics Policy document (`TGC Analytics Policie.md`) is the company-level language authority. Smith uses that policy vocabulary when explaining report scope, but Smith does not redefine telemetry semantics.
+
+Authority boundaries:
+
+- TGC Analytics Policy governs analytics language and expectation framing.
+- Lighthouse governs telemetry collection and report payload semantics.
+- Smith consumes and presents Lighthouse output read-only.
 
 ## TGC Analytics Baseline
 
@@ -44,6 +50,19 @@ Per-site expectation constraints:
 - Host traffic is not the same as page/app execution.
 - Identity is optional and support-class dependent.
 - Null or omitted values are honest when a layer is unsupported or unavailable.
+
+Property declarations reflected by Smith contract language:
+
+- `buscore`: `legacy_hybrid`, intentionally richer, grandfathered richer exception.
+- `star_map_generator`: `event_only`, `Page Level`, `L1 yes / L2 yes / L3 no / L4 no / L5 yes`, extension events include `preview_generated`, `high_res_requested`, `payment_click`, `download_completed`, `error_preview`, `error_high_res`.
+- `tgc_site`: `event_only`, event telemetry only, no traffic layer, no identity layer.
+
+Global filter and suppression constraints:
+
+- `production_only` defaults to true unless payload scope says otherwise.
+- `dev_mode` remains canonical cross-site suppression.
+- Unsupported metrics remain null/omitted by contract rule.
+- Normalization does not imply manufactured parity across all properties.
 
 ## Active Commands
 
@@ -89,10 +108,13 @@ Operator-first deterministic report for all tracked sites or one selected site f
   - For `event_only` sites, event telemetry output is prioritized and should prominently surface `accepted_events_7d`, `page_view` count, event-name breakdown, top paths, top sources, top campaigns, top referrers, top contents, and observability before optional traffic-layer detail.
   - Section naming and content do not imply telemetry parity between support classes.
   - Site read-lines should preserve the distinction between Layer 2 page/event attribution and Layer 3 traffic metrics.
+  - Site read-lines should preserve the distinction between counted intent and non-counted public reads.
   - Site read-lines should not imply that missing traffic or identity layers are defects when the site does not support them.
   - Event-only sites should describe unsupported traffic and identity layers as unsupported by design when Lighthouse does not provide those layers.
   - Event-only sites should use one compact support-class note and one brief unsupported traffic/identity note rather than repeating unavailable language across multiple sections.
   - When Lighthouse provides `events.by_event_name`, `events.top_paths`, `events.top_sources`, `events.top_campaigns`, `events.top_referrers`, or `events.top_contents`, Smith must render them and must not substitute `unavailable` or attribution-missing fallback text.
+  - For `star_map_generator`, expected useful output is event telemetry (`page_view` and extension events), top paths, top sources, top campaigns, top contents, and top referrers.
+  - For `star_map_generator`, missing request/visit and identity metrics are unsupported by design and not failure conditions.
   - Empty attribution arrays or event-name maps in an explicitly present payload field represent empty current scope and must be rendered as empty scope, not as unavailable.
   - When the one-site report is production-only and `excluded_non_production_host` is positive, Smith should explicitly explain that non-production rows were filtered and that useful event rows may exist outside the current production-only filter.
   - Source health formatting reports telemetry integrity values only and avoids noisy unavailable signal-state fields.
@@ -118,7 +140,9 @@ Preferred request examples:
 
 Anti-pattern:
 
-- Do not ask to "make it like Buscore" unless the request explicitly names the capability layers to add.
+- Bad: "Make it like Buscore."
+- Bad: "Add full analytics."
+- Bad: "Make all site reports the same."
 
 ## Deferred Commands
 

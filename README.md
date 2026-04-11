@@ -6,7 +6,13 @@ Lighthouse is the reporting authority. Smith is a read-only consumer and operato
 
 Telemetry authority and normalization authority remain in Lighthouse. Smith does not define telemetry semantics; Smith reflects Lighthouse contracts with deterministic rendering.
 
-TGC analytics policy defines the company baseline analytics language. Smith uses that language when describing reports, but Smith does not redefine the policy or Lighthouse telemetry semantics.
+The TGC Analytics Policy document (`TGC Analytics Policie.md`) is the company-level language authority. Smith uses that policy vocabulary when describing reports, but Smith does not redefine policy or Lighthouse telemetry semantics.
+
+Policy and authority boundary:
+
+- TGC Analytics Policy is the company-level analytics language and expectation authority.
+- Lighthouse is the telemetry and report-data authority.
+- Smith is a read-only consumer and presenter.
 
 ## Commands
 
@@ -34,6 +40,10 @@ Advanced compatibility path (secondary):
 All-sites output is deterministic and sectioned as `Report · OK · 7d`, `Sites Summary`, `Observability`, and `Read`. One-site output follows the canonical normalized per-site section flow (`Summary`, `Event Telemetry`, `Attribution`, `Observability`, `Today` when meaningful, `Traffic`, `Identity`, `Read`; `Identity` remains optional). Nulls are rendered as unavailable and are not rewritten to zero.
 
 For `event_only` sites (including Star Map and TGC Site), Smith now prioritizes event telemetry usefulness in the one-site output: `accepted_events_7d`, `page_view` count, event-name breakdown, attribution lists (top paths when provided, top sources, top campaigns, top referrers, top contents), and observability. Traffic/identity layer status is kept to one compact support-class note plus one brief unsupported traffic line instead of repeated unavailable-only phrasing.
+
+Counted-intent wording is separate from passive reads in Smith language. Public read/hydration routes are not described as counted intent unless Lighthouse or policy contracts say so.
+
+Host traffic wording is kept separate from page/app execution wording. Host-level traffic can include bots/probes and is not presented as the same thing as confirmed page/app execution.
 
 Production-host filtering is rendered explicitly when available: Smith states when report scope is production-only, surfaces `excluded_non_production_host` counts, and distinguishes unsupported/absent fields from explicitly empty attribution lists in the current filtered scope.
 
@@ -71,6 +81,21 @@ Current support-class reality:
 - `star_map_generator` => `event_only`
 - `tgc_site` => `event_only`
 
+Property declarations reflected in Smith wording:
+
+- `buscore`: `legacy_hybrid`, intentionally richer, and treated as a grandfathered richer exception.
+- `star_map_generator`: `event_only`, analytics level `Page Level`, capability layers `L1 yes / L2 yes / L3 no / L4 no / L5 yes`.
+- `tgc_site`: `event_only`, event telemetry only, no traffic layer, no identity layer.
+
+Star Map extension events tracked in policy language:
+
+- `preview_generated`
+- `high_res_requested`
+- `payment_click`
+- `download_completed`
+- `error_preview`
+- `error_high_res`
+
 Expectation model by site:
 
 - `buscore`: `legacy_hybrid` and allowed to surface richer legacy report detail.
@@ -87,6 +112,13 @@ Normalization constraints (Lighthouse authority):
 - Unsupported metrics remain null or are omitted by documented rule.
 - Cloudflare traffic, first-party standardized events, and BUS Core legacy pageviews are distinct source layers and are not interchangeable.
 
+Global filter rules reflected in Smith wording:
+
+- `production_only` defaults to `true` unless Lighthouse scope states otherwise.
+- `dev_mode` is the canonical cross-site suppression standard.
+- Unsupported metrics remain null/omitted by rule.
+- Normalization does not mean manufactured parity across all properties.
+
 ## Glossary
 
 - Support class: Lighthouse site-level telemetry profile (`legacy_hybrid`, `event_only`, etc.).
@@ -99,7 +131,7 @@ Normalization constraints (Lighthouse authority):
 
 ## How To Ask For Telemetry Changes
 
-Smith is read-only. Request telemetry capability changes in Lighthouse language:
+Smith is read-only. Request telemetry capability changes in Lighthouse/TGC policy language.
 
 - "Add a traffic layer to TGC."
 - "Keep Star Map event_only."
@@ -109,7 +141,9 @@ Smith is read-only. Request telemetry capability changes in Lighthouse language:
 
 Anti-pattern:
 
-- Do not ask to "make it like Buscore" unless the request names the specific capability layers to add.
+- Bad: "Make it like Buscore."
+- Bad: "Add full analytics."
+- Bad: "Make all site reports the same."
 
 See [CONTRACTS.md](CONTRACTS.md) for exact output shapes.
 

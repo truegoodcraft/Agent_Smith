@@ -589,7 +589,7 @@ test('report site:star_map_generator uses normalized site view', async () => {
       assert.match(String(content), /Top Sources:/);
       assert.match(String(content), /Top Campaigns:/);
       assert.match(String(content), /Top Referrers:/);
-      assert.match(String(content), /Path\/source\/referrer attribution is being reported from event telemetry/);
+      assert.match(String(content), /Path\/source\/campaign\/content\/referrer attribution is being reported from event telemetry/);
       assert.match(String(content), /Traffic\/identity: unsupported by design unless Lighthouse adds those layers/);
     },
   );

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.10.3] — 2026-04-10
+
+### Changed
+
+*   **Updated policy authority alignment across Smith docs/contracts/SOT**: Smith now explicitly treats `TGC Analytics Policie.md` as the governing language reference for analytics levels, support classes, capability layers, property expectations, null honesty, and operator wording.
+*   **Per-property declaration framing tightened**: BUS Core is explicitly documented as a grandfathered richer `legacy_hybrid` exception; Star Map and TGC Site remain `event_only` with support-class-appropriate expectations.
+*   **Star Map useful-output contract made explicit in rendering language**: One-site report read-lines now state Star Map expected useful output as `page_view` + extension events + top paths + attribution lists (sources/campaigns/contents/referrers), while treating missing requests/visits/identity as unsupported by design.
+*   **Operator guidance expanded with good/bad request examples**: Added compact examples that ask for concrete layer/event changes and removed drift-prone shorthand like "make it like Buscore" and "add full analytics".
+*   **Read-lines now keep host-vs-page/app and counted-intent-vs-public-read language distinct**: Contract/docs wording emphasizes that host traffic is not equivalent to page/app execution and that passive public reads are not automatically counted intent.
+
 ## [0.10.2] — 2026-04-10
 
 ### Fixed

@@ -568,8 +568,12 @@ function formatSiteTopPaths(topPaths?: Array<{ path: string; pageviews?: number 
 
 function formatSiteReport(report: SiteLighthouseReport): string {
   const siteLabel = report.scope?.label || report.scope?.site_key || 'Site';
-  const supportClass = getSupportClass(report.scope?.site_key);
+  const siteKey = report.scope?.site_key ?? undefined;
+  const supportClass = getSupportClass(siteKey);
   const isEventOnlySite = supportClass === 'event_only';
+  const isStarMapSite = siteKey === 'star_map_generator';
+  const isTgcSite = siteKey === 'tgc_site';
+  const isBuscoreSite = siteKey === 'buscore';
   const trafficEnabled = getSiteTrafficEnabled(report);
   const requests7d = report.summary?.requests_7d;
   const visits7d = report.summary?.visits_7d;
@@ -730,7 +734,9 @@ function formatSiteReport(report: SiteLighthouseReport): string {
   const readLines: string[] = [];
   if (!isEventOnlySite && supportClass === 'legacy_hybrid') {
     readLines.push(
-      'This site is legacy_hybrid under current Lighthouse support-class rules and may legitimately expose richer report sections.',
+      isBuscoreSite
+        ? 'BUS Core is a grandfathered legacy_hybrid exception and is intentionally richer; it is not the universal template for all properties.'
+        : 'This site is legacy_hybrid under current Lighthouse support-class rules and may legitimately expose richer report sections.',
     );
   }
 
@@ -759,7 +765,7 @@ function formatSiteReport(report: SiteLighthouseReport): string {
   }
 
   if (hasEventAttribution(report)) {
-    readLines.push('Path/source/referrer attribution is being reported from event telemetry.');
+    readLines.push('Path/source/campaign/content/referrer attribution is being reported from event telemetry.');
   }
 
   const positiveBreakdownEntries = byEventName
@@ -802,8 +808,16 @@ function formatSiteReport(report: SiteLighthouseReport): string {
 
   if (report.identity) {
     readLines.push('Identity-layer reporting is available for this site because Lighthouse provides Layer 4 support.');
-  } else if (isEventOnlySite && (identityUnsupportedByScope || productionOnlyScope === true)) {
-    readLines.push('Identity remains unsupported in this event_only scope.');
+  } else if (isEventOnlySite && (identityUnsupportedByScope || productionOnlyScope === true || !report.identity)) {
+    readLines.push('Identity remains unsupported by design for this event_only site unless Lighthouse adds Layer 4 support.');
+  }
+
+  if (isEventOnlySite && (trafficUnsupportedByDesign || trafficUnsupportedByScope)) {
+    readLines.push('Missing requests/visits in this report is expected for this support class and is not treated as failure.');
+  }
+
+  if (isStarMapSite) {
+    readLines.push('Star Map expected useful output is page_view plus extension events, top paths, and attribution lists (sources, campaigns, contents, referrers).');
   }
 
   if (isEventOnlySite && productionOnlyScope === true && !hasAttributionLists) {
@@ -825,6 +839,19 @@ function formatSiteReport(report: SiteLighthouseReport): string {
     '**Summary**',
     `- Site key: ${formatNullableValue(report.scope?.site_key)}`,
     supportClass ? `- Support class: ${supportClass}` : undefined,
+    isStarMapSite ? '- Analytics level: Page Level' : undefined,
+    isStarMapSite
+      ? '- Capability layers: Layer 1 Registry yes; Layer 2 Event yes; Layer 3 Traffic no; Layer 4 Identity no; Layer 5 Extension yes.'
+      : undefined,
+    isStarMapSite
+      ? '- Star Map extension events: preview_generated, high_res_requested, payment_click, download_completed, error_preview, error_high_res.'
+      : undefined,
+    isTgcSite
+      ? '- Capability layers: Layer 1 Registry yes; Layer 2 Event yes; Layer 3 Traffic no; Layer 4 Identity no; Layer 5 Extension no active extensions.'
+      : undefined,
+    isBuscoreSite
+      ? '- BUS Core remains the grandfathered richer exception and is not a parity baseline for other sites.'
+      : undefined,
     isEventOnlySite ? '- Traffic/identity: unsupported by design unless Lighthouse adds those layers.' : undefined,
     productionOnlyScope === true
       ? '- Report scope is production-only.'

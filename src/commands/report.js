@@ -1,6 +1,18 @@
 import { InteractionResponseType } from 'discord-api-types/v10';
 import { LighthouseError, getLighthouseReport } from '../services/lighthouse';
 import { formatLighthouseReport } from '../logic/report';
+const DISCORD_MESSAGE_MAX_LENGTH = 2000;
+const REPORT_TRUNCATION_SUFFIX = '\n\n[Report truncated to fit Discord message limit.]';
+function clampDiscordReportMessage(content) {
+    if (content.length <= DISCORD_MESSAGE_MAX_LENGTH) {
+        return content;
+    }
+    const maxContentLength = DISCORD_MESSAGE_MAX_LENGTH - REPORT_TRUNCATION_SUFFIX.length;
+    if (maxContentLength <= 0) {
+        return content.slice(0, DISCORD_MESSAGE_MAX_LENGTH);
+    }
+    return `${content.slice(0, maxContentLength)}${REPORT_TRUNCATION_SUFFIX}`;
+}
 function getStringOption(interaction, optionName) {
     const data = interaction.data;
     if (!('options' in data)) {
@@ -79,6 +91,10 @@ async function handle(interaction, env) {
         let reportContent;
         try {
             reportContent = formatLighthouseReport(lighthouseData);
+            if (reportContent.length > DISCORD_MESSAGE_MAX_LENGTH) {
+                console.warn('[REPORT_TRUNCATED] Report exceeded Discord message size limit and was truncated');
+            }
+            reportContent = clampDiscordReportMessage(reportContent);
         }
         catch (formatError) {
             console.error('[REPORT_FORMAT_FAIL] Failed to format report', formatError);

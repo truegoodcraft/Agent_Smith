@@ -2,9 +2,18 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.10.3 — policy authority alignment)
+## Current Mission (v0.10.4 — Discord report-size safety)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+**[v0.10.4 Discord Report-Size Safety]** Smith `/report` interaction responses must remain valid for Discord callback limits even when one-site event telemetry payloads are rich.
+
+Active v0.10.4 interaction safety rules include:
+
+- `/report` response content is clamped to Discord's 2000-character message limit before callback return.
+- Oversized report output is truncated deterministically with the suffix `[Report truncated to fit Discord message limit.]`.
+- This safety is formatter-agnostic and does not fabricate unsupported traffic/identity metrics.
+- `event_only` Star Map/TGC null-honesty and BUS Core legacy-rich routing/behavior remain unchanged.
 
 **[v0.10.3 Policy Authority Alignment]** Smith docs/contracts/operator wording now treat the updated TGC Analytics Policy document (`TGC Analytics Policie.md`) as the governing language authority for analytics levels, support classes, capability layers, null honesty, and per-property expectations.
 

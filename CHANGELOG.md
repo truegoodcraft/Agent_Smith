@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.4] — 2026-04-11
+
+### Fixed
+
+*   **Discord timeout-style failure path for rich Star Map site reports**: `/report site:star_map_generator` now clamps final response content to Discord's 2000-character message limit before returning the interaction payload, preventing oversized-message callback rejection when event-only attribution/event-breakdown sections are large.
+*   **Deterministic oversized-report behavior**: When truncation is applied, Smith appends a deterministic suffix (`[Report truncated to fit Discord message limit.]`) and logs a `[REPORT_TRUNCATED]` warning for operator diagnostics.
+
+### Added
+
+*   **Regression coverage for oversized event-only one-site output**: Added a contract test that drives a rich `star_map_generator` payload through the real `/report` command handler and asserts the final interaction content is exactly 2000 chars, still includes the expected report header, and includes the truncation marker.
+
 ## [0.10.3] — 2026-04-10
 
 ### Changed

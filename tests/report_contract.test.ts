@@ -595,6 +595,58 @@ test('report site:star_map_generator uses normalized site view', async () => {
   );
 });
 
+test('report site:star_map_generator truncates oversized output to Discord limit', async () => {
+  await withMockFetch(
+    (async () =>
+      new Response(JSON.stringify({
+        view: 'site',
+        generated_at: null,
+        scope: {
+          site_key: 'star_map_generator',
+          label: 'Star Map Generator',
+          backend_source: 'lighthouse',
+          cloudflare_traffic_enabled: false,
+        },
+        summary: {
+          requests_7d: null,
+          visits_7d: null,
+          pageviews_7d: 120,
+          accepted_events_7d: 120,
+          last_received_at: '2026-04-11T00:00:00Z',
+          has_recent_signal: true,
+        },
+        traffic: null,
+        events: {
+          accepted_signal_7d: 120,
+          accepted_events: 120,
+          has_recent_signal: true,
+          last_received_at: '2026-04-11T00:00:00Z',
+          unique_paths: 40,
+          top_paths: Array.from({ length: 20 }, (_, i) => ({ path: `/p${i}`, count: i + 1 })),
+          by_event_name: Object.fromEntries(
+            Array.from({ length: 25 }, (_, i) => [`event_${i}`, i + 1]),
+          ),
+          top_sources: Array.from({ length: 12 }, (_, i) => ({ name: `src_${i}`, count: i + 1 })),
+          top_campaigns: Array.from({ length: 8 }, (_, i) => ({ name: `camp_${i}`, count: i + 1 })),
+          top_referrers: Array.from({ length: 8 }, (_, i) => ({ name: `ref_${i}`, count: i + 1 })),
+          top_contents: Array.from({ length: 8 }, (_, i) => ({ name: `content_${i}`, count: i + 1 })),
+        },
+        health: {
+          dropped_invalid: 0,
+          dropped_rate_limited: 0,
+        },
+      })) as Response) as typeof globalThis.fetch,
+    async () => {
+      const payload = await invokeReport([{ name: 'site', value: 'star_map_generator' }]);
+      const content = payload.data && 'content' in payload.data ? String(payload.data.content ?? '') : '';
+
+      assert.equal(content.length, 2000);
+      assert.match(content, /\[Report truncated to fit Discord message limit\.\]/);
+      assert.match(content, /Report · Star Map Generator · 7d/);
+    },
+  );
+});
+
 test('report command remains deterministic and non-model-driven', () => {
   const source = fs.readFileSync('src/commands/report.ts', 'utf8');
   assert.doesNotMatch(source, /model|ollama|llm/i);

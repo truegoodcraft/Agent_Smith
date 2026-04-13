@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.10.5] — 2026-04-13
+
+### Changed
+
+*   **Site report support-class authority moved to Lighthouse scope first**: Smith now trusts `scope.support_class` as the primary render strategy selector for normalized one-site output and only uses local site-key fallback as a temporary bridge.
+*   **Event-only one-site output redesigned for operator actionability**: `event_only` reports now lead with `Attribution Summary` and `Action Summary`, followed by a causality-safe `Read` block and a compact diagnostics footer.
+*   **Causality guardrail added to event-only read interpretation**: Smith explicitly states that source rankings and funnel action totals are separate aggregates and does not imply that top sources caused specific conversions without grouped event-by-source data.
+*   **Discord truncation behavior now attempts footer-first reduction**: `clampDiscordReportMessage()` removes a trailing diagnostics section before falling back to generic end truncation, preserving top operator-priority sections when possible.
+
+### Fixed
+
+*   **Telemetry contract shape alignment for normalized site payloads**: Smith now accepts canonical `events.by_event_name` array rows (`[{ event_name, events }]`) while retaining temporary backward compatibility for legacy object-map payloads.
+*   **Attribution numeric key precedence corrected to canonical field**: Top attribution list normalization now prefers `events` counts over legacy `count`/`pageviews` keys.
+*   **Scope contract drift visibility improved**: Lighthouse client now emits `[REPORT_CONTRACT_WARN] missing scope.support_class` when normalized one-site payloads omit support class.
+
+### Added
+
+*   **Contract tests for support-class trust and fallback behavior**: Added coverage for explicit support-class routing, unknown-site trust behavior, and fallback visibility when support class is missing.
+*   **Contract tests for canonical/legacy event breakdown compatibility**: Added coverage for canonical array `by_event_name` handling and backward-compatible object-map parsing.
+*   **Contract tests for causality-safe event-only narrative**: Added coverage proving read text does not imply false source-to-conversion attribution.
+*   **Contract tests for event-only section suppression and truncation priorities**: Added coverage ensuring Traffic/Identity are omitted unless explicitly enabled and top summaries remain preserved under message-length pressure.
+
 ## [0.10.4] — 2026-04-11
 
 ### Fixed

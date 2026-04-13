@@ -37,7 +37,7 @@ export function selectReportWindow(payload: LegacyLighthouseReport): SelectedLeg
   };
 }
 
-function getSupportClass(siteKey?: string | null): string | undefined {
+function getFallbackSupportClass(siteKey?: string | null): string | undefined {
   if (siteKey === 'buscore') {
     return 'legacy_hybrid';
   }
@@ -47,6 +47,23 @@ function getSupportClass(siteKey?: string | null): string | undefined {
   }
 
   return undefined;
+}
+
+function resolveSupportClass(report: SiteLighthouseReport): {
+  supportClass: string | undefined;
+  usedFallback: boolean;
+} {
+  if (report.scope?.support_class) {
+    return {
+      supportClass: report.scope.support_class,
+      usedFallback: false,
+    };
+  }
+
+  return {
+    supportClass: getFallbackSupportClass(report.scope?.site_key ?? undefined),
+    usedFallback: true,
+  };
 }
 
 function getSiteTrafficEnabled(report: SiteLighthouseReport): boolean | undefined {
@@ -129,6 +146,14 @@ function formatNullableNumber(value?: number | null): string {
   }
 
   return String(value);
+}
+
+function formatSignalState(value: boolean | null | undefined): string {
+  if (typeof value !== 'boolean') {
+    return 'unavailable';
+  }
+
+  return value ? 'recent' : 'stale';
 }
 
 function formatReturnRate(value?: number | null): string {
@@ -352,7 +377,7 @@ function getHumanTrafficRead(
 
 function formatFleetSiteLine(site: FleetReportSite): string {
   const label = site.label || site.site_key;
-  const supportClass = getSupportClass(site.site_key);
+  const supportClass = getFallbackSupportClass(site.site_key);
   const trafficBits = [
     `requests ${formatNullableValue(site.requests_7d)}`,
     `visits ${formatNullableValue(site.visits_7d)}`,
@@ -506,12 +531,28 @@ function formatSiteEventsTopList(heading: string, items?: Array<{ name: string; 
   return [heading, ...entries.map((entry) => `  - ${entry}`)].join('\n');
 }
 
-function formatSiteEventsByName(byEventName?: Record<string, number> | null): string {
-  if (!byEventName || Object.keys(byEventName).length === 0) {
+function toEventCountMap(
+  byEventName?: Array<{ event_name: string; events: number }> | null,
+): Map<string, number> {
+  const map = new Map<string, number>();
+  if (!byEventName) {
+    return map;
+  }
+
+  byEventName.forEach((entry) => {
+    const prior = map.get(entry.event_name) ?? 0;
+    map.set(entry.event_name, prior + entry.events);
+  });
+
+  return map;
+}
+
+function formatSiteEventsByName(byEventName?: Array<{ event_name: string; events: number }> | null): string {
+  if (!byEventName || byEventName.length === 0) {
     return '';
   }
 
-  const entries = Object.entries(byEventName)
+  const entries = [...toEventCountMap(byEventName).entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([name, count]) => `${name} (${count})`);
 
@@ -548,13 +589,15 @@ function hasMeaningfulTrafficWindow(traffic?: SiteLighthouseReport['traffic']): 
   ].some((value) => value !== undefined && value !== null);
 }
 
-function formatSiteTopPaths(topPaths?: Array<{ path: string; pageviews?: number | null; count?: number | null }> | null): string {
+function formatSiteTopPaths(topPaths?: Array<{ path: string; events?: number | null; pageviews?: number | null; count?: number | null }> | null): string {
   if (!topPaths || topPaths.length === 0) {
     return '';
   }
 
   const entries = topPaths.map((entry) => {
-    const count = typeof entry.pageviews === 'number'
+    const count = typeof entry.events === 'number'
+      ? entry.events
+      : typeof entry.pageviews === 'number'
       ? entry.pageviews
       : typeof entry.count === 'number'
         ? entry.count
@@ -566,64 +609,40 @@ function formatSiteTopPaths(topPaths?: Array<{ path: string; pageviews?: number 
   return ['Top Paths:', ...entries.map((entry) => `  - ${entry}`)].join('\n');
 }
 
-function formatSiteReport(report: SiteLighthouseReport): string {
+function formatLegacyHybridReport(
+  report: SiteLighthouseReport,
+  supportClass: string | undefined,
+  usedFallback: boolean,
+): string {
   const siteLabel = report.scope?.label || report.scope?.site_key || 'Site';
-  const siteKey = report.scope?.site_key ?? undefined;
-  const supportClass = getSupportClass(siteKey);
-  const isEventOnlySite = supportClass === 'event_only';
-  const isStarMapSite = siteKey === 'star_map_generator';
-  const isTgcSite = siteKey === 'tgc_site';
-  const isBuscoreSite = siteKey === 'buscore';
-  const trafficEnabled = getSiteTrafficEnabled(report);
-  const requests7d = report.summary?.requests_7d;
-  const visits7d = report.summary?.visits_7d;
-  const pageviews7d = report.summary?.pageviews_7d;
-  const acceptedEvents7d = report.summary?.accepted_events_7d ?? report.events?.accepted_signal_7d;
-  const droppedInvalid = report.health?.dropped_invalid;
-  const droppedRateLimited = report.health?.dropped_rate_limited;
-  const lastReceived =
-    report.summary?.last_received_at ?? report.health?.last_received_at ?? report.events?.last_received_at;
-  const recentSignal = report.summary?.has_recent_signal ?? report.events?.has_recent_signal;
   const byEventName = report.events?.by_event_name ?? undefined;
-  const pageViewFromByName = byEventName && typeof byEventName.page_view === 'number'
-    ? byEventName.page_view
-    : undefined;
-  const pageViewEvents7d = typeof pageviews7d === 'number' ? pageviews7d : pageViewFromByName;
-  const topPaths = report.events?.top_paths;
-  const productionOnlyScope =
-    report.scope?.production_only ?? report.health?.production_only_default ?? undefined;
-  const excludedNonProductionHost = report.health?.excluded_non_production_host;
+  const eventMap = toEventCountMap(byEventName);
+  const pageviews7d =
+    typeof report.summary?.pageviews_7d === 'number'
+      ? report.summary?.pageviews_7d
+      : eventMap.get('page_view');
+  const acceptedEvents7d = report.summary?.accepted_events_7d ?? report.events?.accepted_signal_7d;
+  const productionOnlyScope = report.scope?.production_only ?? report.health?.production_only_default;
   const sectionAvailability = report.scope?.section_availability;
-  const trafficUnsupportedByScope = sectionAvailability?.traffic === false;
-  const identityUnsupportedByScope = sectionAvailability?.identity === false;
-  const trafficRequests7d = report.traffic?.last_7_days?.requests;
-  const trafficVisits7d = report.traffic?.last_7_days?.visits;
-  const trafficUnsupportedByDesign =
-    isEventOnlySite &&
-    trafficEnabled !== true &&
-    !(typeof requests7d === 'number' && requests7d > 0) &&
-    !(typeof visits7d === 'number' && visits7d > 0) &&
-    !(typeof trafficRequests7d === 'number' && trafficRequests7d > 0) &&
-    !(typeof trafficVisits7d === 'number' && trafficVisits7d > 0);
+  const diagnostics = [
+    '**Diagnostics**',
+    `- Last received: ${formatNullableValue(report.summary?.last_received_at ?? report.health?.last_received_at ?? report.events?.last_received_at)}`,
+    `- Included events: ${formatNullableValue(report.health?.included_events)}`,
+    `- Dropped invalid: ${formatNullableValue(report.health?.dropped_invalid)}`,
+    `- Dropped rate limited: ${formatNullableValue(report.health?.dropped_rate_limited)}`,
+  ];
 
-  const today = report.traffic?.latest_day;
-  const todayHasData = hasMeaningfulSiteTraffic(today);
-  const trafficHasData = hasMeaningfulTrafficWindow(report.traffic);
-
-  const todaySection = todayHasData
-    ? [
-        '**Today**',
-        `- Day: ${formatNullableValue(today?.day)}`,
-        `- Captured at: ${formatNullableValue(today?.captured_at)}`,
-        `- Requests: ${formatNullableValue(today?.requests)}`,
-        `- Visits: ${formatNullableValue(today?.visits)}`,
-      ].join('\n')
-    : '';
+  if (productionOnlyScope === true) {
+    diagnostics.push('- Report scope is production-only.');
+    if (typeof report.health?.excluded_non_production_host === 'number') {
+      diagnostics.push(`- Excluded non-production host rows: ${report.health.excluded_non_production_host}`);
+    }
+  }
 
   const eventsLines = ['**Event Telemetry**'];
-  if (report.events || acceptedEvents7d !== undefined || pageViewEvents7d !== undefined) {
+  if (report.events || acceptedEvents7d !== undefined || pageviews7d !== undefined) {
     eventsLines.push(`- Accepted events 7d: ${formatNullableValue(acceptedEvents7d)}`);
-    eventsLines.push(`- page_view events 7d: ${formatNullableValue(pageViewEvents7d)}`);
+    eventsLines.push(`- page_view events 7d: ${formatNullableValue(pageviews7d)}`);
     eventsLines.push(`- Accepted signal 7d: ${formatNullableValue(report.events?.accepted_signal_7d)}`);
     eventsLines.push(`- Accepted events: ${formatNullableValue(report.events?.accepted_events)}`);
 
@@ -646,7 +665,7 @@ function formatSiteReport(report: SiteLighthouseReport): string {
 
   const attributionLines = ['**Attribution**'];
   if (report.events) {
-    const topPathsBlock = formatSiteTopPaths(topPaths);
+    const topPathsBlock = formatSiteTopPaths(report.events.top_paths);
     const topSourcesBlock = formatSiteEventsTopList('Top Sources:', report.events.top_sources);
     const topCampaignsBlock = formatSiteEventsTopList('Top Campaigns:', report.events.top_campaigns);
     const topReferrersBlock = formatSiteEventsTopList('Top Referrers:', report.events.top_referrers);
@@ -666,8 +685,8 @@ function formatSiteReport(report: SiteLighthouseReport): string {
     } else if (attributionFieldsPresent) {
       if (productionOnlyScope === true) {
         attributionLines.push('- Attribution lists are empty in the current production-only scope.');
-        if (typeof excludedNonProductionHost === 'number' && excludedNonProductionHost > 0) {
-          attributionLines.push(`- Non-production host rows were excluded: ${excludedNonProductionHost}.`);
+        if (typeof report.health?.excluded_non_production_host === 'number' && report.health.excluded_non_production_host > 0) {
+          attributionLines.push(`- Non-production host rows were excluded: ${report.health.excluded_non_production_host}.`);
           attributionLines.push('- Useful event rows may exist outside the current production-only filter.');
         }
       } else {
@@ -680,31 +699,6 @@ function formatSiteReport(report: SiteLighthouseReport): string {
     }
   } else {
     attributionLines.push('- unavailable');
-  }
-
-  const healthLines = ['**Observability**'];
-  if (report.health) {
-    healthLines.push(`- Last received: ${formatNullableValue(report.health.last_received_at ?? report.events?.last_received_at)}`);
-    healthLines.push(`- Included events: ${formatNullableValue(report.health.included_events)}`);
-    healthLines.push(`- Dropped invalid: ${formatNullableValue(report.health.dropped_invalid)}`);
-    healthLines.push(`- Dropped rate limited: ${formatNullableValue(report.health.dropped_rate_limited)}`);
-    healthLines.push(`- Excluded test mode: ${formatNullableValue(report.health.excluded_test_mode)}`);
-    healthLines.push(`- Excluded non-prod host: ${formatNullableValue(report.health.excluded_non_production_host)}`);
-    healthLines.push(`- Cloudflare traffic enabled: ${formatNullableValue(report.health.cloudflare_traffic_enabled)}`);
-    healthLines.push(`- Production only default: ${formatNullableValue(report.health.production_only_default)}`);
-    if (productionOnlyScope === true) {
-      healthLines.push('- Report scope is production-only.');
-      if (typeof excludedNonProductionHost === 'number' && excludedNonProductionHost > 0) {
-        healthLines.push(`- Non-production host rows were excluded: ${excludedNonProductionHost}.`);
-      }
-    }
-  } else if (report.events) {
-    healthLines.push(`- Last received: ${formatNullableValue(report.events.last_received_at)}`);
-    if (typeof report.events.has_recent_signal === 'boolean') {
-      healthLines.push(`- Signal state: ${report.events.has_recent_signal ? 'recent' : 'stale'}`);
-    }
-  } else {
-    healthLines.push('- unavailable');
   }
 
   const identityBlock: string[] = [];
@@ -732,105 +726,23 @@ function formatSiteReport(report: SiteLighthouseReport): string {
   }
 
   const readLines: string[] = [];
-  if (!isEventOnlySite && supportClass === 'legacy_hybrid') {
-    readLines.push(
-      isBuscoreSite
-        ? 'BUS Core is a grandfathered legacy_hybrid exception and is intentionally richer; it is not the universal template for all properties.'
-        : 'This site is legacy_hybrid under current Lighthouse support-class rules and may legitimately expose richer report sections.',
-    );
+  if (typeof acceptedEvents7d === 'number' && acceptedEvents7d > 0) {
+    readLines.push(`Event telemetry is active for this site (${acceptedEvents7d} accepted in 7d).`);
   }
-
-  if (
-    (typeof requests7d === 'number' && requests7d > 0) ||
-    (typeof visits7d === 'number' && visits7d > 0)
-  ) {
-    readLines.push('Traffic layer is enabled and reporting request/visit metrics for this site.');
-  } else if (
-    (typeof pageviews7d === 'number' && pageviews7d > 0) ||
-    (typeof acceptedEvents7d === 'number' && acceptedEvents7d > 0)
-  ) {
-    readLines.push('Event telemetry is available even though traffic-layer metrics are not currently present.');
-  } else if (!isEventOnlySite) {
-    readLines.push('Traffic-layer metrics are unavailable in the current Lighthouse payload.');
-  }
-
-  if (typeof acceptedEvents7d === 'number') {
-    if (acceptedEvents7d > 0) {
-      readLines.push(`Event telemetry is active for this site (${acceptedEvents7d} accepted in 7d).`);
-    } else {
-      readLines.push('Event telemetry is present but currently zero in 7d.');
-    }
-  } else if (report.events) {
-    readLines.push('Event telemetry is present in the current Lighthouse payload.');
-  }
-
   if (hasEventAttribution(report)) {
-    readLines.push('Path/source/campaign/content/referrer attribution is being reported from event telemetry.');
+    readLines.push('Attribution lists are present for this reporting scope.');
   }
-
-  const positiveBreakdownEntries = byEventName
-    ? Object.entries(byEventName).filter(
-        ([, count]) => typeof count === 'number' && count > 0,
-      )
-    : [];
-  const nonPageViewBreakdownEntries = positiveBreakdownEntries.filter(([name]) => name !== 'page_view');
-  const hasAttributionLists =
-    (report.events?.top_sources?.length ?? 0) > 0 ||
-    (report.events?.top_campaigns?.length ?? 0) > 0 ||
-    (report.events?.top_referrers?.length ?? 0) > 0 ||
-    (report.events?.top_contents?.length ?? 0) > 0 ||
-    (topPaths?.length ?? 0) > 0;
-
-  if (
-    isEventOnlySite &&
-    typeof pageViewEvents7d === 'number' &&
-    pageViewEvents7d > 0 &&
-    nonPageViewBreakdownEntries.length === 0 &&
-    !hasAttributionLists
-  ) {
-    readLines.push('Only page_view is currently reported; broader funnel events are not present in this payload.');
+  if (usedFallback) {
+    readLines.push('Support class is currently inferred via temporary fallback and should be removed once Lighthouse always sends scope.support_class.');
   }
-
-  if (
-    (typeof droppedInvalid === 'number' && droppedInvalid > 0) ||
-    (typeof droppedRateLimited === 'number' && droppedRateLimited > 0)
-  ) {
-    readLines.push('Dropped telemetry is present and should be reviewed in observability metrics.');
-  }
-
-  if (lastReceived) {
-    readLines.push(`Last telemetry received: ${lastReceived}`);
-  }
-
-  if (typeof recentSignal === 'boolean') {
-    readLines.push(`Signal state is ${recentSignal ? 'recent and healthy.' : 'stale; refresh may be needed.'}`);
-  }
-
-  if (report.identity) {
-    readLines.push('Identity-layer reporting is available for this site because Lighthouse provides Layer 4 support.');
-  } else if (isEventOnlySite && (identityUnsupportedByScope || productionOnlyScope === true || !report.identity)) {
-    readLines.push('Identity remains unsupported by design for this event_only site unless Lighthouse adds Layer 4 support.');
-  }
-
-  if (isEventOnlySite && (trafficUnsupportedByDesign || trafficUnsupportedByScope)) {
-    readLines.push('Missing requests/visits in this report is expected for this support class and is not treated as failure.');
-  }
-
-  if (isStarMapSite) {
-    readLines.push('Star Map expected useful output is page_view plus extension events, top paths, and attribution lists (sources, campaigns, contents, referrers).');
-  }
-
-  if (isEventOnlySite && productionOnlyScope === true && !hasAttributionLists) {
-    readLines.push('Attribution lists are empty in the current production-only scope.');
-    if (typeof excludedNonProductionHost === 'number' && excludedNonProductionHost > 0) {
-      readLines.push(`Non-production host rows were excluded: ${excludedNonProductionHost}.`);
-      readLines.push('Useful event rows may exist outside the current production-only filter.');
-    }
-  }
-
   if (readLines.length === 0) {
     readLines.push('No meaningful operator signals are available for this site yet.');
   }
+
+  const showTrafficSection =
+    report.scope?.section_availability?.traffic === true ||
+    hasMeaningfulTrafficWindow(report.traffic) ||
+    hasMeaningfulSiteTraffic(report.traffic?.latest_day);
 
   return [
     `**Report · ${siteLabel} · 7d**`,
@@ -839,20 +751,7 @@ function formatSiteReport(report: SiteLighthouseReport): string {
     '**Summary**',
     `- Site key: ${formatNullableValue(report.scope?.site_key)}`,
     supportClass ? `- Support class: ${supportClass}` : undefined,
-    isStarMapSite ? '- Analytics level: Page Level' : undefined,
-    isStarMapSite
-      ? '- Capability layers: Layer 1 Registry yes; Layer 2 Event yes; Layer 3 Traffic no; Layer 4 Identity no; Layer 5 Extension yes.'
-      : undefined,
-    isStarMapSite
-      ? '- Star Map extension events: preview_generated, high_res_requested, payment_click, download_completed, error_preview, error_high_res.'
-      : undefined,
-    isTgcSite
-      ? '- Capability layers: Layer 1 Registry yes; Layer 2 Event yes; Layer 3 Traffic no; Layer 4 Identity no; Layer 5 Extension no active extensions.'
-      : undefined,
-    isBuscoreSite
-      ? '- BUS Core remains the grandfathered richer exception and is not a parity baseline for other sites.'
-      : undefined,
-    isEventOnlySite ? '- Traffic/identity: unsupported by design unless Lighthouse adds those layers.' : undefined,
+    usedFallback ? '- Support class source: temporary fallback (contract drift bridge)' : undefined,
     productionOnlyScope === true
       ? '- Report scope is production-only.'
       : productionOnlyScope === false
@@ -860,54 +759,194 @@ function formatSiteReport(report: SiteLighthouseReport): string {
         : undefined,
     `- Backend source: ${formatNullableValue(report.scope?.backend_source)}`,
     `- Accepted events 7d: ${formatNullableValue(acceptedEvents7d)}`,
-    `- page_view events 7d: ${formatNullableValue(pageViewEvents7d)}`,
+    `- page_view events 7d: ${formatNullableValue(pageviews7d)}`,
     `- Requests 7d: ${formatNullableValue(report.summary?.requests_7d)}`,
     `- Visits 7d: ${formatNullableValue(report.summary?.visits_7d)}`,
     `- Cloudflare traffic enabled: ${formatNullableValue(report.scope?.cloudflare_traffic_enabled)}`,
-    `- Last received: ${formatNullableValue(lastReceived)}`,
-    recentSignal !== undefined
-      ? `- Signal state: ${typeof recentSignal === 'boolean' ? (recentSignal ? 'recent' : 'stale') : 'unavailable'}`
+    `- Last received: ${formatNullableValue(report.summary?.last_received_at ?? report.health?.last_received_at ?? report.events?.last_received_at)}`,
+    report.summary?.has_recent_signal !== undefined || report.events?.has_recent_signal !== undefined
+      ? `- Signal state: ${formatSignalState(report.summary?.has_recent_signal ?? report.events?.has_recent_signal)}`
       : undefined,
     '',
     eventsLines.join('\n'),
     '',
     attributionLines.join('\n'),
-    '',
-    healthLines.join('\n'),
-    ...(todaySection ? ['', todaySection] : []),
-    ...(isEventOnlySite || todayHasData || trafficHasData || typeof requests7d === 'number' || typeof visits7d === 'number'
+    ...(showTrafficSection
       ? [
           '',
           '**Traffic**',
-          ...(isEventOnlySite
-            ? [
-                trafficUnsupportedByDesign || trafficUnsupportedByScope
-                  ? '- Unsupported by design for this event_only site.'
-                  : '- Limited Layer 3 traffic metrics are present for this event_only site.',
-                `- Cloudflare traffic enabled: ${formatNullableValue(report.traffic?.cloudflare_traffic_enabled)}`,
-                `- Requests 7d: ${formatNullableValue(report.traffic?.last_7_days?.requests)}`,
-                `- Visits 7d: ${formatNullableValue(report.traffic?.last_7_days?.visits)}`,
-              ]
-            : [
-                trafficEnabled === true
-                  ? '- Traffic layer is enabled for this site.'
-                  : '- Traffic layer values reflect Lighthouse output when Layer 3 data is available.',
-                `- Cloudflare traffic enabled: ${formatNullableValue(report.traffic?.cloudflare_traffic_enabled)}`,
-                `- Requests 7d: ${formatNullableValue(report.traffic?.last_7_days?.requests)}`,
-                `- Visits 7d: ${formatNullableValue(report.traffic?.last_7_days?.visits)}`,
-                `- Avg daily requests: ${formatNullableValue(report.traffic?.last_7_days?.avg_daily_requests)}`,
-                `- Avg daily visits: ${formatNullableValue(report.traffic?.last_7_days?.avg_daily_visits)}`,
-                `- Days with data: ${formatNullableValue(report.traffic?.last_7_days?.days_with_data)}`,
-              ]),
+          `- Cloudflare traffic enabled: ${formatNullableValue(report.traffic?.cloudflare_traffic_enabled)}`,
+          `- Requests 7d: ${formatNullableValue(report.traffic?.last_7_days?.requests)}`,
+          `- Visits 7d: ${formatNullableValue(report.traffic?.last_7_days?.visits)}`,
+          `- Avg daily requests: ${formatNullableValue(report.traffic?.last_7_days?.avg_daily_requests)}`,
+          `- Avg daily visits: ${formatNullableValue(report.traffic?.last_7_days?.avg_daily_visits)}`,
+          `- Days with data: ${formatNullableValue(report.traffic?.last_7_days?.days_with_data)}`,
         ]
       : []),
     ...(identityBlock.length > 0 ? ['', identityBlock.join('\n')] : []),
+    '',
+    diagnostics.join('\n'),
     '',
     '**Read**',
     ...readLines.map((line) => `- ${line}`),
   ]
     .filter((line) => line !== undefined)
     .join('\n');
+}
+
+const EVENT_ONLY_FUNNEL: Array<{ name: string; label: string }> = [
+  { name: 'page_view', label: 'Page views' },
+  { name: 'preview_generated', label: 'Previews generated' },
+  { name: 'high_res_requested', label: 'High-res requests' },
+  { name: 'payment_click', label: 'Payment clicks' },
+  { name: 'download_completed', label: 'Downloads completed' },
+];
+
+function formatEventOnlyReport(
+  report: SiteLighthouseReport,
+  supportClass: string | undefined,
+  usedFallback: boolean,
+): string {
+  const siteLabel = report.scope?.label || report.scope?.site_key || 'Site';
+  const productionOnlyScope = report.scope?.production_only ?? report.health?.production_only_default;
+  const byEventName = report.events?.by_event_name ?? undefined;
+  const eventMap = toEventCountMap(byEventName);
+
+  const getEventCount = (eventName: string): number => eventMap.get(eventName) ?? 0;
+
+  const compactLabel = (value: string, maxLength = 42): string => {
+    if (value.length <= maxLength) {
+      return value;
+    }
+
+    return `${value.slice(0, maxLength - 3)}...`;
+  };
+
+  const formatAttributionSummary = (title: string, items?: Array<{ name: string; count: number }> | null) => {
+    if (!items) {
+      return '';
+    }
+    if (items.length === 0) {
+      return `- ${title}: empty in current scope`;
+    }
+
+    return `- ${title}: ${items
+      .slice(0, 5)
+      .map((entry) => `${compactLabel(entry.name)} (${entry.count})`)
+      .join(' · ')}`;
+  };
+
+  const attributionLines = ['**Attribution Summary**'];
+  const sourcesLine = formatAttributionSummary('Top Sources', report.events?.top_sources);
+  const campaignsLine = formatAttributionSummary('Top Campaigns', report.events?.top_campaigns);
+  const contentsLine = formatAttributionSummary('Top Contents', report.events?.top_contents);
+  const pathsLine = report.events?.top_paths
+    ? report.events.top_paths.length === 0
+      ? '- Top Paths: empty in current scope'
+      : `- Top Paths: ${report.events.top_paths
+          .slice(0, 5)
+          .map((entry) => {
+            const count =
+              typeof entry.events === 'number'
+                ? entry.events
+                : typeof entry.count === 'number'
+                  ? entry.count
+                  : typeof entry.pageviews === 'number'
+                    ? entry.pageviews
+                    : null;
+            return `${compactLabel(entry.path)} (${formatNullableValue(count)})`;
+          })
+          .join(' · ')}`
+    : '';
+
+  [sourcesLine, campaignsLine, contentsLine, pathsLine]
+    .filter(Boolean)
+    .forEach((line) => attributionLines.push(line));
+
+  if (attributionLines.length === 1) {
+    attributionLines.push('- Attribution lists are unavailable in this payload.');
+  }
+
+  const actionLines = ['**Action Summary**'];
+  EVENT_ONLY_FUNNEL.forEach((eventDef) => {
+    actionLines.push(`- ${eventDef.label}: ${getEventCount(eventDef.name)}`);
+  });
+
+  const readLines = [
+    '- Source rankings and action totals are separate aggregate views.',
+    '- This report does not attribute specific actions to specific sources without event-by-source grouping from Lighthouse.',
+    `- Funnel activity snapshot: previews ${getEventCount('preview_generated')}, payment clicks ${getEventCount('payment_click')}, downloads ${getEventCount('download_completed')}.`,
+  ];
+
+  if (productionOnlyScope === true && (report.events?.top_sources?.length ?? 0) === 0) {
+    readLines.push('- Attribution lists are empty in the current production-only scope.');
+  }
+
+  const diagnostics = [
+    '**Diagnostics**',
+    `- Accepted events 7d: ${formatNullableValue(report.summary?.accepted_events_7d ?? report.events?.accepted_signal_7d)}`,
+    `- Accepted signal 7d: ${formatNullableValue(report.events?.accepted_signal_7d)}`,
+    `- Included events: ${formatNullableValue(report.health?.included_events)}`,
+    `- Excluded test mode: ${formatNullableValue(report.health?.excluded_test_mode)}`,
+    `- Excluded non-production host: ${formatNullableValue(report.health?.excluded_non_production_host)}`,
+    `- Dropped invalid: ${formatNullableValue(report.health?.dropped_invalid)}`,
+    `- Dropped rate limited: ${formatNullableValue(report.health?.dropped_rate_limited)}`,
+    `- Cloudflare traffic enabled: ${formatNullableValue(report.scope?.cloudflare_traffic_enabled ?? report.health?.cloudflare_traffic_enabled)}`,
+    `- Last received: ${formatNullableValue(report.summary?.last_received_at ?? report.health?.last_received_at ?? report.events?.last_received_at)}`,
+    supportClass ? `- Support class: ${supportClass}` : '- Support class: unavailable',
+  ];
+
+  if (usedFallback) {
+    diagnostics.push('- support_class source: temporary fallback (remove after Lighthouse contract compliance is verified)');
+  }
+
+  const showTrafficSection = report.scope?.section_availability?.traffic === true;
+  const showIdentitySection = report.scope?.section_availability?.identity === true;
+
+  return [
+    `**Report · ${siteLabel} · 7d**`,
+    `- Generated at: ${formatNullableValue(report.generated_at)}`,
+    `- Site key: ${formatNullableValue(report.scope?.site_key)}`,
+    productionOnlyScope === true ? '- Scope: production-only' : undefined,
+    '',
+    attributionLines.join('\n'),
+    '',
+    actionLines.join('\n'),
+    '',
+    '**Read**',
+    ...readLines,
+    ...(showTrafficSection
+      ? [
+          '',
+          '**Traffic**',
+          `- Requests 7d: ${formatNullableValue(report.traffic?.last_7_days?.requests)}`,
+          `- Visits 7d: ${formatNullableValue(report.traffic?.last_7_days?.visits)}`,
+        ]
+      : []),
+    ...(showIdentitySection && report.identity
+      ? [
+          '',
+          '**Identity**',
+          `- New users (7d): ${formatNullableNumber(report.identity.last_7_days?.new_users)}`,
+          `- Returning users (7d): ${formatNullableNumber(report.identity.last_7_days?.returning_users)}`,
+          `- Sessions (7d): ${formatNullableNumber(report.identity.last_7_days?.sessions)}`,
+        ]
+      : []),
+    '',
+    diagnostics.join('\n'),
+  ]
+    .filter((line) => line !== undefined)
+    .join('\n');
+}
+
+function formatSiteReport(report: SiteLighthouseReport): string {
+  const { supportClass, usedFallback } = resolveSupportClass(report);
+
+  if (supportClass === 'event_only') {
+    return formatEventOnlyReport(report, supportClass, usedFallback);
+  }
+
+  return formatLegacyHybridReport(report, supportClass, usedFallback);
 }
 
 function formatSourceHealthReport(report: SourceHealthLighthouseReport): string {

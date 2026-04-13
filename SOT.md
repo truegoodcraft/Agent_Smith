@@ -2,9 +2,22 @@
 
 **Newest SOT entries supersede all older wording. Agents must read this file top-to-bottom. Historical deltas are preserved for audit only.**
 
-## Current Mission (v0.10.4 — Discord report-size safety)
+## Current Mission (v0.10.5 — support_class authority + event_only action-first rendering)
 
 Agent Smith is a Cloudflare-native, deterministic, personal-use watcher for fixed, read-only backend telemetry. It is built on Cloudflare Workers, Durable Objects, and Discord interactions over HTTP.
+
+**[v0.10.5 Support-Class Authority and Event-Only Action-First Rendering]** Smith normalized one-site reports now trust Lighthouse `scope.support_class` first, treat missing support class as contract drift, and render `event_only` reports in an action-first operator layout that avoids false attribution.
+
+Active v0.10.5 rules include:
+
+- Render strategy for `view=site` is selected from `scope.support_class` when present.
+- If `scope.support_class` is missing, Smith logs `[REPORT_CONTRACT_WARN] missing scope.support_class` and uses temporary site-key fallback only as a bridge.
+- Event-only rendering order is operator-first: `Attribution Summary`, `Action Summary`, `Read`, `Diagnostics`.
+- Event-only `Read` language must keep source rankings and funnel action totals explicitly separated and must not claim source-level conversion causality without grouped event-by-source data from Lighthouse.
+- Event-only output suppresses Traffic/Identity sections unless Lighthouse explicitly marks those sections as supported.
+- Site event parsing accepts canonical `events.by_event_name` array rows and remains backward-compatible with temporary object-map legacy shape.
+- Attribution count parsing prefers canonical `events` keys over legacy `count`/`pageviews` keys.
+- Discord clamp logic attempts to remove a trailing diagnostics section before generic truncation to preserve top operator-priority summary content.
 
 **[v0.10.4 Discord Report-Size Safety]** Smith `/report` interaction responses must remain valid for Discord callback limits even when one-site event telemetry payloads are rich.
 

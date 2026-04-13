@@ -137,6 +137,7 @@ export interface SiteReportScope {
   site_key?: string | null;
   label?: string | null;
   backend_source?: string | null;
+  support_class?: string | null;
   cloudflare_traffic_enabled?: boolean | null;
   production_only?: boolean | null;
   section_availability?: Record<string, boolean | null>;
@@ -175,13 +176,17 @@ export interface SiteReportEventTopItem {
 
 export interface SiteReportPathItem {
   path: string;
+  events?: number | null;
   pageviews?: number | null;
   count?: number | null;
 }
 
-export interface SiteReportEventsByName {
-  [eventName: string]: number;
+export interface SiteReportEventByNameItem {
+  event_name: string;
+  events: number;
 }
+
+export type SiteReportEventsByName = SiteReportEventByNameItem[];
 
 export interface SiteReportEvents {
   accepted_signal_7d?: number | null;
@@ -651,6 +656,7 @@ function normalizeSiteReportScope(data: unknown): SiteReportScope | null {
     site_key: isNullableString(data.site_key) ? data.site_key : undefined,
     label: isNullableString(data.label) ? data.label : undefined,
     backend_source: isNullableString(data.backend_source) ? data.backend_source : undefined,
+    support_class: isNullableString(data.support_class) ? data.support_class : undefined,
     cloudflare_traffic_enabled: cloudflareTrafficEnabled,
     production_only:
       typeof data.production_only === 'boolean' || data.production_only === null
@@ -750,11 +756,28 @@ function normalizeSiteReportEvents(data: unknown): SiteReportEvents | null {
   ]);
   const lastReceivedAt = getNullableStringFromAliases(data, 'last_received_at', ['last_received']);
 
-  const byEventName: SiteReportEventsByName | undefined = isRecord(data.by_event_name)
-    ? Object.fromEntries(
-        Object.entries(data.by_event_name).filter(([, value]) => typeof value === 'number'),
-      ) as SiteReportEventsByName
-    : undefined;
+  const normalizeByEventName = (items: unknown): SiteReportEventsByName | undefined => {
+    if (Array.isArray(items)) {
+      return items
+        .filter((item): item is Record<string, unknown> => isRecord(item))
+        .filter((item) => typeof item.event_name === 'string' && typeof item.events === 'number')
+        .map((item) => ({
+          event_name: item.event_name as string,
+          events: item.events as number,
+        }));
+    }
+
+    // Temporary bridge for legacy map payloads while Lighthouse contract alignment completes.
+    if (isRecord(items)) {
+      return Object.entries(items)
+        .filter(([, value]) => typeof value === 'number')
+        .map(([event_name, events]) => ({ event_name, events: events as number }));
+    }
+
+    return undefined;
+  };
+
+  const byEventName = normalizeByEventName(data.by_event_name);
 
   const normalizeTopPaths = (items: unknown): SiteReportPathItem[] | undefined => {
     if (!Array.isArray(items)) {
@@ -766,6 +789,7 @@ function normalizeSiteReportEvents(data: unknown): SiteReportEvents | null {
       .filter((item) => typeof item.path === 'string')
       .map((item) => ({
         path: item.path as string,
+        events: isNullableNumber(item.events) ? item.events : undefined,
         pageviews: isNullableNumber(item.pageviews) ? item.pageviews : undefined,
         count: isNullableNumber(item.count) ? item.count : undefined,
       }));
@@ -788,7 +812,9 @@ function normalizeSiteReportEvents(data: unknown): SiteReportEvents | null {
           .map((key) => item[key])
           .find((value): value is string => typeof value === 'string');
         const count =
-          typeof item.count === 'number'
+          typeof item.events === 'number'
+            ? item.events
+            : typeof item.count === 'number'
             ? item.count
             : typeof item.pageviews === 'number'
               ? item.pageviews
@@ -831,8 +857,8 @@ function normalizeSiteReportEvents(data: unknown): SiteReportEvents | null {
   if (Array.isArray(data.top_paths)) {
     result.top_paths = normalizedTopPaths ?? [];
   }
-  if (isRecord(data.by_event_name)) {
-    result.by_event_name = byEventName ?? {};
+  if (Array.isArray(data.by_event_name) || isRecord(data.by_event_name)) {
+    result.by_event_name = byEventName ?? [];
   }
   if (Array.isArray(data.top_sources)) {
     result.top_sources = normalizedTopSources ?? [];

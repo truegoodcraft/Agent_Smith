@@ -6,10 +6,20 @@ import { LighthouseReportRequest, ReportView, SiteKey } from '../types/telemetry
 
 const DISCORD_MESSAGE_MAX_LENGTH = 2000;
 const REPORT_TRUNCATION_SUFFIX = '\n\n[Report truncated to fit Discord message limit.]';
+const DIAGNOSTICS_SECTION_MARKER = '\n\n**Diagnostics**\n';
 
 function clampDiscordReportMessage(content: string): string {
   if (content.length <= DISCORD_MESSAGE_MAX_LENGTH) {
     return content;
+  }
+
+  // Keep operator-priority sections intact by removing diagnostics/footer first.
+  const diagnosticsIndex = content.indexOf(DIAGNOSTICS_SECTION_MARKER);
+  if (diagnosticsIndex >= 0) {
+    const withoutDiagnostics = content.slice(0, diagnosticsIndex);
+    if (withoutDiagnostics.length <= DISCORD_MESSAGE_MAX_LENGTH) {
+      return withoutDiagnostics;
+    }
   }
 
   const maxContentLength = DISCORD_MESSAGE_MAX_LENGTH - REPORT_TRUNCATION_SUFFIX.length;

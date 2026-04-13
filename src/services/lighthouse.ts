@@ -102,6 +102,15 @@ export async function getLighthouseReport(
     throw new LighthouseError('Invalid or malformed payload received from Lighthouse service.');
   }
 
+  if (
+    request.view === 'site' &&
+    'view' in normalizedReport &&
+    normalizedReport.view === 'site' &&
+    (!normalizedReport.scope || !normalizedReport.scope.support_class)
+  ) {
+    console.warn('[REPORT_CONTRACT_WARN] missing scope.support_class');
+  }
+
   console.log('[REPORT_VALIDATION_OK] Payload passed schema validation');
 
   return normalizedReport;

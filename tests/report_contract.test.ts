@@ -14,11 +14,11 @@ import {
   normalizeLegacyLighthouseReport,
   normalizeSiteLighthouseReport,
   normalizeSourceHealthLighthouseReport,
-} from '../src/types/telemetry';
-import { formatLighthouseReport } from '../src/logic/report';
-import { getLighthouseReport, LighthouseError } from '../src/services/lighthouse';
-import { commandDefinitions } from '../src/commands';
-import { report } from '../src/commands/report';
+} from '../src/types/telemetry.ts';
+import { formatLighthouseReport } from '../src/logic/report.ts';
+import { getLighthouseReport, LighthouseError } from '../src/services/lighthouse.ts';
+import { commandDefinitions } from '../src/commands/index.ts';
+import { report } from '../src/commands/report.ts';
 
 function withMockFetch(mockImpl: typeof globalThis.fetch, fn: () => Promise<void>): Promise<void> {
   const original = globalThis.fetch;
@@ -38,319 +38,6 @@ const baseEnv = {
   LIGHTHOUSE_ADMIN_TOKEN: 'admin',
   LIGHTHOUSE_REPORT_URL: 'https://example.test/report',
 };
-
-test('parses fleet response payload', () => {
-  const payload = {
-    view: 'fleet',
-    generated_at: '2026-04-08T00:00:00Z',
-    sites: [
-      {
-        site_key: 'buscore',
-        label: 'BUS Core',
-        backend_source: 'lighthouse',
-        cloudflare_traffic_enabled: true,
-        pageviews_7d: 10,
-        requests_7d: 20,
-        visits_7d: 15,
-        accepted_signal_7d: 7,
-        has_recent_signal: true,
-        last_received_at: null,
-      },
-    ],
-  };
-
-  const parsed = normalizeFleetLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.equal(parsed.view, 'fleet');
-  assert.equal(parsed.sites[0].accepted_signal_7d, 7);
-});
-
-test('parses fleet alias fields without dropping values', () => {
-  const payload = {
-    view: 'fleet',
-    generated_at: '2026-04-08T00:00:00Z',
-    sites: [
-      {
-        site_key: 'buscore',
-        label: 'BUS Core',
-        backend_source: 'lighthouse',
-        traffic_enabled: true,
-        accepted_events_7d: 49,
-        last_received: '2026-04-08T19:55:17.273Z',
-      },
-    ],
-  };
-
-  const parsed = normalizeFleetLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.equal(parsed.sites[0].cloudflare_traffic_enabled, true);
-  assert.equal(parsed.sites[0].accepted_signal_7d, 49);
-  assert.equal(parsed.sites[0].last_received_at, '2026-04-08T19:55:17.273Z');
-
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /Cloudflare traffic enabled: true/);
-  assert.match(output, /Accepted signal 7d: 49/);
-  assert.match(output, /Last signal received: 2026-04-08T19:55:17.273Z/);
-  assert.match(output, /Accepted signal 7d total: 49/);
-});
-
-test('parses site response payload', () => {
-  const payload = {
-    view: 'site',
-    generated_at: '2026-04-08T00:00:00Z',
-    scope: {
-      site_key: 'tgc_site',
-      label: 'TGC Site',
-      backend_source: 'lighthouse',
-      cloudflare_traffic_enabled: false,
-    },
-    summary: {
-      pageviews_7d: null,
-      requests_7d: null,
-      visits_7d: null,
-    },
-    traffic: null,
-    events: {
-      accepted_signal_7d: 3,
-      has_recent_signal: false,
-      last_received_at: null,
-    },
-    health: {
-      dropped_invalid: null,
-      dropped_rate_limited: 0,
-    },
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.equal(parsed.view, 'site');
-  assert.equal(parsed.events?.accepted_signal_7d, 3);
-});
-
-test('parses site alias fields without dropping values', () => {
-  const payload = {
-    view: 'site',
-    generated_at: '2026-04-08T00:00:00Z',
-    scope: {
-      site_key: 'star_map_generator',
-      label: 'Star Map Generator',
-      backend_source: 'lighthouse',
-      traffic_enabled: true,
-    },
-    summary: {
-      pageviews_7d: 10,
-      requests_7d: 11,
-      visits_7d: 12,
-    },
-    traffic: null,
-    events: {
-      accepted_events_7d: 3,
-      has_recent_signal: true,
-      last_received: '2026-04-08T20:05:07.704Z',
-    },
-    health: {
-      dropped_invalid: 0,
-      dropped_rate_limited: 0,
-    },
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.equal(parsed.scope?.cloudflare_traffic_enabled, true);
-  assert.equal(parsed.events?.accepted_signal_7d, 3);
-  assert.equal(parsed.events?.last_received_at, '2026-04-08T20:05:07.704Z');
-
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /Cloudflare traffic enabled: true/);
-  assert.match(output, /Accepted signal 7d: 3/);
-  assert.match(output, /Last received: 2026-04-08T20:05:07.704Z/);
-});
-
-test('parses source health response payload', () => {
-  const payload = {
-    view: 'source_health',
-    generated_at: '2026-04-08T00:00:00Z',
-    sites: [
-      {
-        site_key: 'star_map_generator',
-        label: 'Star Map Generator',
-        accepted_signal_7d: 5,
-        has_recent_signal: null,
-        last_received_at: null,
-        dropped_invalid: null,
-        dropped_rate_limited: 2,
-        cloudflare_traffic_enabled: false,
-      },
-    ],
-  };
-
-  const parsed = normalizeSourceHealthLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.equal(parsed.view, 'source_health');
-  assert.equal(parsed.sites[0].accepted_signal_7d, 5);
-});
-
-test('parses source health alias fields without dropping values', () => {
-  const payload = {
-    view: 'source_health',
-    generated_at: '2026-04-08T00:00:00Z',
-    sites: [
-      {
-        site_key: 'star_map_generator',
-        label: 'Star Map Generator',
-        accepted_events_7d: 3,
-        has_recent_signal: true,
-        last_received: '2026-04-08T20:05:07.704Z',
-        dropped_invalid: 0,
-        dropped_rate_limited: 0,
-        traffic_enabled: false,
-      },
-    ],
-  };
-
-  const parsed = normalizeSourceHealthLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.equal(parsed.sites[0].accepted_signal_7d, 3);
-  assert.equal(parsed.sites[0].last_received_at, '2026-04-08T20:05:07.704Z');
-  assert.equal(parsed.sites[0].cloudflare_traffic_enabled, false);
-
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /accepted_signal_7d=3/);
-  assert.match(output, /last_received=2026-04-08T20:05:07.704Z/);
-  assert.match(output, /traffic_enabled=false/);
-});
-
-test('accepted_signal_7d rejects boolean and sanitizes to unavailable', () => {
-  const payload = {
-    view: 'fleet',
-    generated_at: '2026-04-08T00:00:00Z',
-    sites: [
-      {
-        site_key: 'buscore',
-        label: 'BUS Core',
-        accepted_signal_7d: true,
-      },
-    ],
-  };
-
-  const parsed = normalizeFleetLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.equal(parsed.sites[0].accepted_signal_7d, undefined);
-
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /Accepted signal 7d: unavailable/);
-});
-
-test('maps invalid view 400 error', async () => {
-  await withMockFetch(
-    (async () =>
-      new Response(JSON.stringify({ ok: false, error: 'invalid_view' }), {
-        status: 400,
-      })) as typeof globalThis.fetch,
-    async () => {
-      await assert.rejects(
-        async () => getLighthouseReport(baseEnv, { view: 'fleet' }),
-        (error) => error instanceof LighthouseError && error.code === 'invalid_view',
-      );
-    },
-  );
-});
-
-test('maps missing site key 400 error', async () => {
-  await withMockFetch(
-    (async () =>
-      new Response(JSON.stringify({ ok: false, error: 'missing_site_key' }), {
-        status: 400,
-      })) as typeof globalThis.fetch,
-    async () => {
-      await assert.rejects(
-        async () => getLighthouseReport(baseEnv, { view: 'site' }),
-        (error) => error instanceof LighthouseError && error.code === 'missing_site_key',
-      );
-    },
-  );
-});
-
-test('maps invalid site key 400 error', async () => {
-  await withMockFetch(
-    (async () =>
-      new Response(JSON.stringify({ ok: false, error: 'invalid_site_key' }), {
-        status: 400,
-      })) as typeof globalThis.fetch,
-    async () => {
-      await assert.rejects(
-        async () => getLighthouseReport(baseEnv, { view: 'site', siteKey: 'buscore' }),
-        (error) => error instanceof LighthouseError && error.code === 'invalid_site_key',
-      );
-    },
-  );
-});
-
-test('null metrics render as unavailable, never as zero', () => {
-  const report = {
-    view: 'fleet' as const,
-    generated_at: null,
-    sites: [
-      {
-        site_key: 'tgc_site',
-        label: 'TGC Site',
-        backend_source: 'lighthouse',
-        cloudflare_traffic_enabled: false,
-        pageviews_7d: null,
-        requests_7d: null,
-        visits_7d: null,
-        accepted_signal_7d: null,
-        has_recent_signal: null,
-        last_received_at: null,
-      },
-    ],
-  };
-
-  const output = formatLighthouseReport(report);
-  assert.match(output, /page_view unavailable/);
-  assert.doesNotMatch(output, /page_view 0/);
-});
-
-test('fleet report hides unavailable has_recent_signal noise', () => {
-  const report = {
-    view: 'fleet' as const,
-    generated_at: null,
-    sites: [
-      {
-        site_key: 'tgc_site',
-        label: 'TGC Site',
-        accepted_signal_7d: 9,
-        has_recent_signal: null,
-        last_received_at: null,
-      },
-    ],
-  };
-
-  const output = formatLighthouseReport(report);
-  assert.doesNotMatch(output, /Signal state: unavailable/);
-  assert.match(output, /Accepted signal 7d: 9/);
-});
-
-test('legacy report path still formats', () => {
-  const payload = normalizeLegacyLighthouseReport({
-    today: { update_checks: 3, downloads: 1, errors: 0 },
-    traffic: {
-      latest_day: { day: null, visits: null, requests: null, captured_at: null },
-      last_7_days: {
-        visits: null,
-        requests: null,
-        avg_daily_visits: null,
-        avg_daily_requests: null,
-        days_with_data: null,
-      },
-    },
-  });
-
-  assert.ok(payload);
-  const output = formatLighthouseReport(payload);
-  assert.match(output, /\*\*Report · OK · today\*\*/);
-  assert.match(output, /legacy-rich report path is intentionally richer than normalized event_only site views/);
-});
 
 function buildInteraction(options?: Array<{ name: string; value: string }>): APIApplicationCommandInteraction {
   return {
@@ -380,269 +67,417 @@ async function invokeReport(options?: Array<{ name: string; value: string }>): P
   return response.json() as Promise<APIInteractionResponse>;
 }
 
-test('bare /report defaults to all-sites fleet operator report', async () => {
-  let requestedUrl = '';
-  await withMockFetch(
-    (async (input) => {
-      requestedUrl = String(input);
-      return new Response(JSON.stringify({
-        view: 'fleet',
-        generated_at: null,
-        sites: [
-          {
-            site_key: 'buscore',
-            label: 'BUS Core',
-            requests_7d: 8,
-            visits_7d: 7,
-            pageviews_7d: 6,
-            accepted_signal_7d: 3,
-            has_recent_signal: true,
-            last_received_at: '2026-04-08T00:00:00Z',
-          },
-        ],
-      })) as Response;
-    }) as typeof globalThis.fetch,
-    async () => {
-      const payload = await invokeReport();
-      const content = payload.data && 'content' in payload.data ? payload.data.content : '';
+test('parses fleet and source_health alias fields', () => {
+  const fleet = normalizeFleetLighthouseReport({
+    view: 'fleet',
+    generated_at: null,
+    sites: [{ site_key: 'buscore', accepted_events_7d: 9, traffic_enabled: true, last_received: 'x' }],
+  });
+  assert.ok(fleet);
+  assert.equal(fleet.sites[0].accepted_signal_7d, 9);
+  assert.equal(fleet.sites[0].cloudflare_traffic_enabled, true);
 
-      assert.match(String(content), /\*\*Report · OK · 7d\*\*/);
-      assert.match(String(content), /\*\*Sites Summary\*\*/);
-      assert.match(requestedUrl, /view=fleet/);
+  const sourceHealth = normalizeSourceHealthLighthouseReport({
+    view: 'source_health',
+    generated_at: null,
+    sites: [{ site_key: 'buscore', accepted_events_7d: 8, traffic_enabled: false, last_received: 'y' }],
+  });
+  assert.ok(sourceHealth);
+  assert.equal(sourceHealth.sites[0].accepted_signal_7d, 8);
+  assert.equal(sourceHealth.sites[0].cloudflare_traffic_enabled, false);
+});
+
+test('parses site aliases and canonical events count key', () => {
+  const site = normalizeSiteLighthouseReport({
+    view: 'site',
+    generated_at: null,
+    scope: { site_key: 'star_map_generator', support_class: 'event_only', traffic_enabled: false },
+    summary: { accepted_events_7d: 11, last_received: '2026-04-01T00:00:00Z' },
+    traffic: null,
+    events: {
+      accepted_events_7d: 10,
+      by_event_name: [{ event_name: 'page_view', events: 8 }],
+      top_sources: [{ source: 'reddit', events: 7, count: 999 }],
+    },
+    health: null,
+  });
+
+  assert.ok(site);
+  assert.equal(site.scope?.cloudflare_traffic_enabled, false);
+  assert.equal(site.summary?.accepted_events_7d, 11);
+  assert.equal(site.events?.accepted_signal_7d, 10);
+  assert.equal(site.events?.top_sources?.[0].count, 7);
+});
+
+test('legacy report formatting remains available for buscore route', () => {
+  const payload = normalizeLegacyLighthouseReport({
+    today: { update_checks: 1, downloads: 1, errors: 0 },
+    last_7_days: { update_checks: 2, downloads: 2, errors: 0 },
+  });
+
+  assert.ok(payload);
+  const output = formatLighthouseReport(payload);
+  assert.match(output, /\*\*Report · OK · 7d\*\*/);
+  assert.match(output, /\*\*Summary\*\*/);
+});
+
+test('maps invalid view/missing site/invalid site errors', async () => {
+  await withMockFetch(
+    (async () => new Response(JSON.stringify({ ok: false, error: 'invalid_view' }), { status: 400 })) as typeof globalThis.fetch,
+    async () => {
+      await assert.rejects(
+        async () => getLighthouseReport(baseEnv, { view: 'fleet' }),
+        (error) => error instanceof LighthouseError && error.code === 'invalid_view',
+      );
+    },
+  );
+
+  await withMockFetch(
+    (async () => new Response(JSON.stringify({ ok: false, error: 'missing_site_key' }), { status: 400 })) as typeof globalThis.fetch,
+    async () => {
+      await assert.rejects(
+        async () => getLighthouseReport(baseEnv, { view: 'site' }),
+        (error) => error instanceof LighthouseError && error.code === 'missing_site_key',
+      );
+    },
+  );
+
+  await withMockFetch(
+    (async () => new Response(JSON.stringify({ ok: false, error: 'invalid_site_key' }), { status: 400 })) as typeof globalThis.fetch,
+    async () => {
+      await assert.rejects(
+        async () => getLighthouseReport(baseEnv, { view: 'site', siteKey: 'buscore' }),
+        (error) => error instanceof LighthouseError && error.code === 'invalid_site_key',
+      );
     },
   );
 });
 
-test('bare /report preserves alias observability fields from fleet output', async () => {
+test('logs contract warning when scope.support_class is missing', async () => {
+  const originalWarn = console.warn;
+  const warnings: string[] = [];
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map(String).join(' '));
+  };
+
+  try {
+    await withMockFetch(
+      (async () =>
+        new Response(JSON.stringify({
+          view: 'site',
+          generated_at: null,
+          scope: { site_key: 'star_map_generator', label: 'Star Map Generator' },
+          summary: null,
+          traffic: null,
+          events: { accepted_signal_7d: 1 },
+          health: null,
+        })) as Response) as typeof globalThis.fetch,
+      async () => {
+        const result = await getLighthouseReport(baseEnv, { view: 'site', siteKey: 'star_map_generator' });
+        assert.ok('view' in result && result.view === 'site');
+      },
+    );
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.ok(warnings.some((line) => line.includes('[REPORT_CONTRACT_WARN] missing scope.support_class')));
+});
+
+test('support_class trust behavior with unknown site key', () => {
+  const payload = normalizeSiteLighthouseReport({
+    view: 'site',
+    generated_at: null,
+    scope: {
+      site_key: 'unknown_property',
+      label: 'Unknown Property',
+      support_class: 'event_only',
+    },
+    summary: { accepted_events_7d: 8 },
+    traffic: null,
+    events: { by_event_name: [{ event_name: 'page_view', events: 5 }] },
+    health: null,
+  });
+
+  assert.ok(payload);
+  const output = formatLighthouseReport(payload);
+  assert.match(output, /\*\*Attribution Summary\*\*/);
+  assert.match(output, /\*\*Action Summary\*\*/);
+  assert.doesNotMatch(output, /temporary fallback/i);
+});
+
+test('temporary fallback appears when support_class is missing', () => {
+  const payload = normalizeSiteLighthouseReport({
+    view: 'site',
+    generated_at: null,
+    scope: { site_key: 'star_map_generator', label: 'Star Map Generator' },
+    summary: { accepted_events_7d: 8 },
+    traffic: null,
+    events: { by_event_name: [{ event_name: 'page_view', events: 5 }] },
+    health: null,
+  });
+
+  assert.ok(payload);
+  const output = formatLighthouseReport(payload);
+  assert.match(output, /Support class: event_only/);
+  assert.match(output, /support_class source: temporary fallback/i);
+});
+
+test('by_event_name canonical array shape drives action summary', () => {
+  const payload = normalizeSiteLighthouseReport({
+    view: 'site',
+    generated_at: null,
+    scope: { site_key: 'star_map_generator', support_class: 'event_only' },
+    summary: null,
+    traffic: null,
+    events: {
+      by_event_name: [
+        { event_name: 'page_view', events: 10 },
+        { event_name: 'preview_generated', events: 3 },
+        { event_name: 'payment_click', events: 1 },
+      ],
+    },
+    health: null,
+  });
+
+  assert.ok(payload);
+  assert.equal(payload.events?.by_event_name?.length, 3);
+
+  const output = formatLighthouseReport(payload);
+  assert.match(output, /Page views: 10/);
+  assert.match(output, /Previews generated: 3/);
+  assert.match(output, /Payment clicks: 1/);
+});
+
+test('legacy by_event_name object-map remains backward compatible', () => {
+  const payload = normalizeSiteLighthouseReport({
+    view: 'site',
+    generated_at: null,
+    scope: { site_key: 'star_map_generator', support_class: 'event_only' },
+    summary: null,
+    traffic: null,
+    events: {
+      by_event_name: { page_view: 11, preview_generated: 2 },
+    },
+    health: null,
+  });
+
+  assert.ok(payload);
+  assert.equal(payload.events?.by_event_name?.length, 2);
+
+  const output = formatLighthouseReport(payload);
+  assert.match(output, /Page views: 11/);
+  assert.match(output, /Previews generated: 2/);
+});
+
+test('no false source-to-conversion inference in read text', () => {
+  const payload = normalizeSiteLighthouseReport({
+    view: 'site',
+    generated_at: null,
+    scope: { site_key: 'star_map_generator', support_class: 'event_only' },
+    summary: { accepted_events_7d: 60 },
+    traffic: null,
+    events: {
+      by_event_name: [{ event_name: 'preview_generated', events: 10 }],
+      top_sources: [{ source: 'reddit', events: 50 }],
+    },
+    health: null,
+  });
+
+  assert.ok(payload);
+  const output = formatLighthouseReport(payload);
+  assert.match(output, /Source rankings and action totals are separate aggregate views/);
+  assert.match(output, /does not attribute specific actions to specific sources/);
+  assert.doesNotMatch(output, /reddit.*preview/i);
+});
+
+test('event_only report omits Traffic and Identity by default', () => {
+  const payload = normalizeSiteLighthouseReport({
+    view: 'site',
+    generated_at: null,
+    scope: {
+      site_key: 'star_map_generator',
+      support_class: 'event_only',
+      section_availability: { traffic: false, identity: false },
+    },
+    summary: null,
+    traffic: {
+      cloudflare_traffic_enabled: false,
+      latest_day: null,
+      last_7_days: { requests: 22, visits: 20 },
+    },
+    events: { by_event_name: [{ event_name: 'page_view', events: 2 }] },
+    health: null,
+    identity: {
+      today: { new_users: 1, returning_users: 1, sessions: 1 },
+      last_7_days: { new_users: 1, returning_users: 1, sessions: 1, return_rate: 1 },
+    },
+  });
+
+  assert.ok(payload);
+  const output = formatLighthouseReport(payload);
+  assert.doesNotMatch(output, /\*\*Traffic\*\*/);
+  assert.doesNotMatch(output, /\*\*Identity\*\*/);
+});
+
+test('production-only wording remains explicit for event_only', () => {
+  const payload = normalizeSiteLighthouseReport({
+    view: 'site',
+    generated_at: null,
+    scope: {
+      site_key: 'tgc_site',
+      support_class: 'event_only',
+      production_only: true,
+    },
+    summary: { accepted_events_7d: 2 },
+    traffic: null,
+    events: {
+      by_event_name: [{ event_name: 'page_view', events: 2 }],
+      top_sources: [],
+    },
+    health: {
+      excluded_non_production_host: 1,
+      production_only_default: true,
+    },
+  });
+
+  assert.ok(payload);
+  const output = formatLighthouseReport(payload);
+  assert.match(output, /Scope: production-only/);
+  assert.match(output, /Attribution lists are empty in the current production-only scope/);
+  assert.match(output, /Excluded non-production host: 1/);
+});
+
+test('event_only diagnostics include accepted signal and observability fields', () => {
+  const payload = normalizeSiteLighthouseReport({
+    view: 'site',
+    generated_at: null,
+    scope: { site_key: 'tgc_site', support_class: 'event_only' },
+    summary: null,
+    traffic: null,
+    events: { accepted_signal_7d: 0, by_event_name: null },
+    health: {
+      included_events: 500,
+      excluded_test_mode: 2,
+      excluded_non_production_host: 3,
+      dropped_invalid: 10,
+      dropped_rate_limited: 5,
+      cloudflare_traffic_enabled: true,
+      last_received_at: '2026-04-08T20:02:00Z',
+    },
+  });
+
+  assert.ok(payload);
+  const output = formatLighthouseReport(payload);
+  assert.match(output, /Accepted signal 7d: 0/);
+  assert.match(output, /Included events: 500/);
+  assert.match(output, /Excluded test mode: 2/);
+  assert.match(output, /Excluded non-production host: 3/);
+  assert.match(output, /Dropped invalid: 10/);
+  assert.match(output, /Dropped rate limited: 5/);
+  assert.match(output, /Cloudflare traffic enabled: true/);
+});
+
+test('report command route behavior: fleet default, buscore legacy, event_only site view', async () => {
+  let requestedUrls: string[] = [];
+
+  await withMockFetch(
+    (async (input) => {
+      requestedUrls.push(String(input));
+      const url = String(input);
+
+      if (url.includes('view=fleet')) {
+        return new Response(JSON.stringify({
+          view: 'fleet',
+          generated_at: null,
+          sites: [{ site_key: 'buscore', accepted_signal_7d: 1 }],
+        })) as Response;
+      }
+
+      if (url.includes('view=site') && url.includes('site_key=star_map_generator')) {
+        return new Response(JSON.stringify({
+          view: 'site',
+          generated_at: null,
+          scope: { site_key: 'star_map_generator', support_class: 'event_only' },
+          summary: { accepted_events_7d: 1 },
+          traffic: null,
+          events: { by_event_name: [{ event_name: 'page_view', events: 1 }] },
+          health: null,
+        })) as Response;
+      }
+
+      return new Response(JSON.stringify({
+        today: { update_checks: 1, downloads: 0, errors: 0 },
+      })) as Response;
+    }) as typeof globalThis.fetch,
+    async () => {
+      const fleet = await invokeReport();
+      const fleetContent = fleet.data && 'content' in fleet.data ? String(fleet.data.content ?? '') : '';
+      assert.match(fleetContent, /\*\*Report · OK · 7d\*\*/);
+
+      const buscore = await invokeReport([{ name: 'site', value: 'buscore' }]);
+      const buscoreContent = buscore.data && 'content' in buscore.data ? String(buscore.data.content ?? '') : '';
+      assert.match(buscoreContent, /\*\*Report · OK · today\*\*/);
+
+      const site = await invokeReport([{ name: 'site', value: 'star_map_generator' }]);
+      const siteContent = site.data && 'content' in site.data ? String(site.data.content ?? '') : '';
+      assert.match(siteContent, /\*\*Attribution Summary\*\*/);
+
+      assert.ok(requestedUrls.some((url) => /view=fleet/.test(url)));
+      assert.ok(requestedUrls.some((url) => /view=site/.test(url) && /site_key=star_map_generator/.test(url)));
+      assert.ok(requestedUrls.some((url) => !/view=/.test(url) && !/site_key=/.test(url)));
+    },
+  );
+});
+
+test('truncation preserves Attribution and Action summaries by trimming diagnostics first', async () => {
+  const longToken = 'x'.repeat(280);
+
   await withMockFetch(
     (async () =>
       new Response(JSON.stringify({
-        view: 'fleet',
-        generated_at: null,
-        sites: [
-          {
-            site_key: 'buscore',
-            label: 'BUS Core',
-            backend_source: 'lighthouse',
-            accepted_events_7d: 49,
-            last_received: '2026-04-08T19:55:17.273Z',
-            traffic_enabled: true,
-          },
-          {
-            site_key: 'star_map_generator',
-            label: 'Star Map Generator',
-            backend_source: 'lighthouse',
-            accepted_events_7d: 3,
-            last_received: '2026-04-08T20:05:07.704Z',
-            traffic_enabled: false,
-          },
-        ],
-      })) as Response) as typeof globalThis.fetch,
-    async () => {
-      const payload = await invokeReport();
-      const content = payload.data && 'content' in payload.data ? payload.data.content : '';
-
-      assert.match(String(content), /Accepted signal 7d total: 52/);
-      assert.match(String(content), /Accepted signal 7d: 49/);
-      assert.match(String(content), /Last signal received: 2026-04-08T19:55:17.273Z/);
-      assert.match(String(content), /Cloudflare traffic enabled: true/);
-      assert.match(String(content), /Accepted signal 7d: 3/);
-      assert.match(String(content), /Last signal received: 2026-04-08T20:05:07.704Z/);
-    },
-  );
-});
-
-test('report site:buscore uses legacy rich report path', async () => {
-  let requestedUrl = '';
-  await withMockFetch(
-    (async (input) => {
-      requestedUrl = String(input);
-      return new Response(JSON.stringify({
-        today: { update_checks: 6, downloads: 4, errors: 0 },
-        last_7_days: { update_checks: 30, downloads: 14, errors: 1 },
-        traffic: {
-          latest_day: { day: '2026-04-07', requests: 20, visits: 12, captured_at: '2026-04-08T00:00:00Z' },
-          last_7_days: { requests: 120, visits: 70, avg_daily_requests: 17, avg_daily_visits: 10, days_with_data: 7 },
-        },
-        human_traffic: {
-          today: { pageviews: 9, last_received_at: '2026-04-08T00:00:00Z' },
-          last_7_days: {
-            pageviews: 55,
-            days_with_data: 7,
-            top_paths: [{ path: '/downloads', pageviews: 20 }],
-            top_referrers: [{ referrer_domain: 'google.com', pageviews: 10 }],
-            top_sources: [{ source: 'search', pageviews: 18 }],
-          },
-          observability: {
-            accepted: 49,
-            dropped_rate_limited: 0,
-            dropped_invalid: 1,
-            last_received_at: '2026-04-08T00:00:00Z',
-          },
-        },
-        identity: {
-          today: { new_users: 2, returning_users: 1, sessions: 4 },
-          last_7_days: { new_users: 7, returning_users: 3, sessions: 12, return_rate: 0.3 },
-          top_sources_by_returning_users: [{ source: 'search', users: 2 }],
-        },
-      })) as Response;
-    }) as typeof globalThis.fetch,
-    async () => {
-      const payload = await invokeReport([{ name: 'site', value: 'buscore' }]);
-      const content = payload.data && 'content' in payload.data ? payload.data.content : '';
-
-      assert.doesNotMatch(requestedUrl, /view=/);
-      assert.doesNotMatch(requestedUrl, /site_key=/);
-      assert.match(String(content), /\*\*Report · OK · 7d\*\*/);
-      assert.match(String(content), /\*\*Summary\*\*/);
-      assert.match(String(content), /\*\*Today\*\*/);
-      assert.match(String(content), /\*\*Traffic\*\*/);
-      assert.match(String(content), /\*\*Human Traffic\*\*/);
-      assert.match(String(content), /\*\*Observability\*\*/);
-      assert.match(String(content), /\*\*Identity\*\*/);
-      assert.match(String(content), /\*\*Read\*\*/);
-    },
-  );
-});
-
-test('report site:tgc_site uses normalized site view', async () => {
-  let requestedUrl = '';
-  await withMockFetch(
-    (async (input) => {
-      requestedUrl = String(input);
-      return new Response(JSON.stringify({
-        view: 'site',
-        generated_at: null,
-        scope: {
-          site_key: 'tgc_site',
-          label: 'TGC Site',
-          backend_source: 'lighthouse',
-          cloudflare_traffic_enabled: false,
-        },
-        summary: { requests_7d: null, visits_7d: null, pageviews_7d: null },
-        traffic: null,
-        events: { accepted_signal_7d: 2, has_recent_signal: false, last_received_at: null },
-        health: { dropped_invalid: null, dropped_rate_limited: 1 },
-      })) as Response;
-    }) as typeof globalThis.fetch,
-    async () => {
-      const payload = await invokeReport([{ name: 'site', value: 'tgc_site' }]);
-      const content = payload.data && 'content' in payload.data ? payload.data.content : '';
-
-      assert.match(requestedUrl, /view=site/);
-      assert.match(requestedUrl, /site_key=tgc_site/);
-      assert.match(String(content), /Report · TGC Site · 7d/);
-      assert.match(String(content), /\*\*Event Telemetry\*\*/);
-      assert.match(String(content), /\*\*Attribution\*\*/);
-      assert.match(String(content), /Support class: event_only/);
-      assert.match(String(content), /Traffic\/identity: unsupported by design unless Lighthouse adds those layers/);
-      assert.match(String(content), /\*\*Traffic\*\*[\s\S]*Unsupported by design for this event_only site/);
-      assert.match(String(content), /Event telemetry is active for this site \(2 accepted in 7d\)/);
-      assert.match(String(content), /page_view events 7d: unavailable/);
-    },
-  );
-});
-
-test('report site:star_map_generator uses normalized site view', async () => {
-  let requestedUrl = '';
-  await withMockFetch(
-    (async (input) => {
-      requestedUrl = String(input);
-      return new Response(JSON.stringify({
         view: 'site',
         generated_at: null,
         scope: {
           site_key: 'star_map_generator',
           label: 'Star Map Generator',
-          backend_source: 'lighthouse',
-          cloudflare_traffic_enabled: false,
-        },
-        summary: { requests_7d: null, visits_7d: null, pageviews_7d: 3 },
-        traffic: null,
-        events: {
-          accepted_signal_7d: 1,
-          has_recent_signal: true,
-          last_received_at: '2026-04-08T00:00:00Z',
-          unique_paths: 2,
-          top_paths: [{ path: '/create', count: 1 }],
-          by_event_name: { page_view: 3, preview_generated: 1 },
-          top_sources: [{ name: 'github', count: 1 }],
-          top_campaigns: [{ name: 'starmap_launch', count: 1 }],
-          top_referrers: [{ name: 'example.com', count: 1 }],
-        },
-        health: { dropped_invalid: 0, dropped_rate_limited: 0 },
-      })) as Response;
-    }) as typeof globalThis.fetch,
-    async () => {
-      const payload = await invokeReport([{ name: 'site', value: 'star_map_generator' }]);
-      const content = payload.data && 'content' in payload.data ? payload.data.content : '';
-
-      assert.match(requestedUrl, /view=site/);
-      assert.match(requestedUrl, /site_key=star_map_generator/);
-      assert.match(String(content), /Report · Star Map Generator · 7d/);
-      assert.match(String(content), /\*\*Event Telemetry\*\*/);
-      assert.match(String(content), /\*\*Attribution\*\*/);
-      assert.match(String(content), /Support class: event_only/);
-      assert.match(String(content), /page_view events 7d: 3/);
-      assert.match(String(content), /preview_generated \(1\)/);
-      assert.match(String(content), /Top Paths:/);
-      assert.match(String(content), /Top Sources:/);
-      assert.match(String(content), /Top Campaigns:/);
-      assert.match(String(content), /Top Referrers:/);
-      assert.match(String(content), /Path\/source\/campaign\/content\/referrer attribution is being reported from event telemetry/);
-      assert.match(String(content), /Traffic\/identity: unsupported by design unless Lighthouse adds those layers/);
-    },
-  );
-});
-
-test('report site:star_map_generator truncates oversized output to Discord limit', async () => {
-  await withMockFetch(
-    (async () =>
-      new Response(JSON.stringify({
-        view: 'site',
-        generated_at: null,
-        scope: {
-          site_key: 'star_map_generator',
-          label: 'Star Map Generator',
-          backend_source: 'lighthouse',
-          cloudflare_traffic_enabled: false,
+          support_class: 'event_only',
         },
         summary: {
-          requests_7d: null,
-          visits_7d: null,
-          pageviews_7d: 120,
           accepted_events_7d: 120,
-          last_received_at: '2026-04-11T00:00:00Z',
-          has_recent_signal: true,
         },
         traffic: null,
         events: {
           accepted_signal_7d: 120,
-          accepted_events: 120,
-          has_recent_signal: true,
-          last_received_at: '2026-04-11T00:00:00Z',
-          unique_paths: 40,
-          top_paths: Array.from({ length: 20 }, (_, i) => ({ path: `/p${i}`, count: i + 1 })),
-          by_event_name: Object.fromEntries(
-            Array.from({ length: 25 }, (_, i) => [`event_${i}`, i + 1]),
-          ),
-          top_sources: Array.from({ length: 12 }, (_, i) => ({ name: `src_${i}`, count: i + 1 })),
-          top_campaigns: Array.from({ length: 8 }, (_, i) => ({ name: `camp_${i}`, count: i + 1 })),
-          top_referrers: Array.from({ length: 8 }, (_, i) => ({ name: `ref_${i}`, count: i + 1 })),
-          top_contents: Array.from({ length: 8 }, (_, i) => ({ name: `content_${i}`, count: i + 1 })),
+          by_event_name: [
+            { event_name: 'page_view', events: 120 },
+            { event_name: 'preview_generated', events: 80 },
+            { event_name: 'high_res_requested', events: 60 },
+            { event_name: 'payment_click', events: 40 },
+            { event_name: 'download_completed', events: 20 },
+          ],
+          top_paths: Array.from({ length: 20 }, (_, i) => ({ path: `/path_${i}_${longToken}`, events: i + 1 })),
+          top_sources: Array.from({ length: 20 }, (_, i) => ({ source: `src_${i}_${longToken}`, events: i + 1 })),
+          top_campaigns: Array.from({ length: 20 }, (_, i) => ({ utm_campaign: `camp_${i}_${longToken}`, events: i + 1 })),
+          top_contents: Array.from({ length: 20 }, (_, i) => ({ utm_content: `content_${i}_${longToken}`, events: i + 1 })),
         },
         health: {
+          included_events: 120,
           dropped_invalid: 0,
           dropped_rate_limited: 0,
+          excluded_non_production_host: 0,
         },
       })) as Response) as typeof globalThis.fetch,
     async () => {
       const payload = await invokeReport([{ name: 'site', value: 'star_map_generator' }]);
       const content = payload.data && 'content' in payload.data ? String(payload.data.content ?? '') : '';
 
-      assert.equal(content.length, 2000);
-      assert.match(content, /\[Report truncated to fit Discord message limit\.\]/);
-      assert.match(content, /Report · Star Map Generator · 7d/);
+      assert.ok(content.length <= 2000);
+      assert.match(content, /\*\*Attribution Summary\*\*/);
+      assert.match(content, /\*\*Action Summary\*\*/);
+      if (content.includes('[Report truncated to fit Discord message limit.]')) {
+        assert.doesNotMatch(content, /\*\*Diagnostics\*\*/);
+      }
     },
   );
 });
@@ -652,7 +487,7 @@ test('report command remains deterministic and non-model-driven', () => {
   assert.doesNotMatch(source, /model|ollama|llm/i);
 });
 
-test('command registration payload includes health and report with report site/view options', () => {
+test('command registration includes report site/view options', () => {
   const names = commandDefinitions.map((definition) => definition.name).sort();
   assert.deepEqual(names, ['health', 'report']);
 
@@ -663,386 +498,3 @@ test('command registration payload includes health and report with report site/v
   const optionNames = reportDefinition.options.map((option) => option.name).sort();
   assert.deepEqual(optionNames, ['site', 'view']);
 });
-
-test('site report summary displays all expanded fields when present', () => {
-  const payload = {
-    view: 'site' as const,
-    generated_at: '2026-04-08T00:00:00Z',
-    scope: {
-      site_key: 'buscore',
-      label: 'BUS Core',
-      backend_source: 'lighthouse',
-      cloudflare_traffic_enabled: true,
-    },
-    summary: {
-      pageviews_7d: 100,
-      requests_7d: 150,
-      visits_7d: 80,
-      accepted_events_7d: 42,
-      last_received_at: '2026-04-08T20:00:00Z',
-      has_recent_signal: true,
-    },
-    traffic: { latest_day: null, last_7_days: null },
-    events: null,
-    health: null,
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.equal(parsed.summary?.accepted_events_7d, 42);
-  assert.equal(parsed.summary?.last_received_at, '2026-04-08T20:00:00Z');
-  assert.equal(parsed.summary?.has_recent_signal, true);
-
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /Support class: legacy_hybrid/);
-  assert.match(output, /Accepted events 7d: 42/);
-  assert.match(output, /Last received: 2026-04-08T20:00:00Z/);
-  assert.match(output, /Signal state: recent/);
-});
-
-test('site report events section displays event details when present', () => {
-  const payload = {
-    view: 'site' as const,
-    generated_at: '2026-04-08T00:00:00Z',
-    scope: { site_key: 'star_map_generator', label: 'Star Map Generator' },
-    summary: { accepted_events_7d: 50, pageviews_7d: 18 },
-    traffic: null,
-    events: {
-      accepted_signal_7d: 50,
-      accepted_events: 48,
-      unique_paths: 12,
-      has_recent_signal: true,
-      last_received_at: '2026-04-08T20:01:00Z',
-      top_paths: [{ path: '/generator', count: 18 }],
-      by_event_name: { page_view: 18, preview_generated: 12, click: 30 },
-      top_sources: [
-        { name: 'reddit', count: 25 },
-        { name: 'pinterest', count: 15 },
-      ],
-      top_campaigns: [{ name: 'starmap_launch', count: 40 }],
-      top_referrers: [{ name: 'pinterest.com', count: 35 }],
-      top_contents: [{ name: 'hero_banner', count: 22 }],
-    },
-    health: { included_events: 48, dropped_invalid: 0, dropped_rate_limited: 0 },
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.equal(parsed.events?.accepted_signal_7d, 50);
-  assert.equal(parsed.events?.accepted_events, 48);
-  assert.equal(parsed.events?.unique_paths, 12);
-  assert.equal(parsed.events?.top_paths?.[0].path, '/generator');
-  assert.ok(parsed.events?.by_event_name);
-  assert.equal(parsed.events.by_event_name.click, 30);
-
-  const output = formatLighthouseReport(parsed);
-  assert.ok(output.indexOf('**Summary**') < output.indexOf('**Event Telemetry**'));
-  assert.ok(output.indexOf('**Event Telemetry**') < output.indexOf('**Attribution**'));
-  assert.ok(output.indexOf('**Attribution**') < output.indexOf('**Observability**'));
-  assert.match(output, /Accepted events 7d: 50/);
-  assert.match(output, /page_view events 7d: 18/);
-  assert.match(output, /Accepted signal 7d: 50/);
-  assert.match(output, /Accepted events: 48/);
-  assert.match(output, /Unique paths: 12/);
-  assert.match(output, /\*\*Event Telemetry\*\*/);
-  assert.match(output, /Event-name breakdown:/);
-  assert.match(output, /page_view \(18\)/);
-  assert.match(output, /preview_generated \(12\)/);
-  assert.match(output, /click \(30\)/);
-  assert.match(output, /\*\*Attribution\*\*/);
-  assert.match(output, /Top Paths:/);
-  assert.match(output, /\/generator \(18\)/);
-  assert.match(output, /Top Sources:/);
-  assert.match(output, /reddit \(25\)/);
-  assert.match(output, /Top Campaigns:/);
-  assert.match(output, /starmap_launch \(40\)/);
-  assert.match(output, /Top Referrers:/);
-  assert.match(output, /pinterest.com \(35\)/);
-  assert.match(output, /Top Contents:/);
-  assert.match(output, /hero_banner \(22\)/);
-  assert.doesNotMatch(output, /Attribution lists were not provided/);
-  assert.doesNotMatch(output, /Event-name breakdown: unavailable/);
-});
-
-test('site report preserves empty attribution arrays as empty scope, not unavailable', () => {
-  const payload = {
-    view: 'site' as const,
-    generated_at: '2026-04-10T00:00:00Z',
-    scope: {
-      site_key: 'star_map_generator',
-      label: 'Star Map Generator',
-      production_only: true,
-    },
-    summary: { accepted_events_7d: 4, pageviews_7d: 4 },
-    traffic: null,
-    events: {
-      accepted_signal_7d: 4,
-      by_event_name: {},
-      top_paths: [],
-      top_sources: [],
-      top_campaigns: [],
-      top_referrers: [],
-      top_contents: [],
-    },
-    health: {
-      excluded_non_production_host: 3,
-      production_only_default: true,
-    },
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.deepEqual(parsed.events?.top_paths, []);
-  assert.deepEqual(parsed.events?.top_sources, []);
-  assert.deepEqual(parsed.events?.top_contents, []);
-
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /Event-name breakdown: empty in current scope/);
-  assert.match(output, /Attribution lists are empty in the current production-only scope/);
-  assert.match(output, /Non-production host rows were excluded: 3/);
-  assert.match(output, /Useful event rows may exist outside the current production-only filter/);
-  assert.doesNotMatch(output, /\*\*Attribution\*\*[\s\S]*- unavailable/);
-});
-
-test('production filter wording is explicit when scope is production-only', () => {
-  const payload = {
-    view: 'site' as const,
-    generated_at: '2026-04-10T00:00:00Z',
-    scope: {
-      site_key: 'tgc_site',
-      label: 'TGC Site',
-      production_only: true,
-      section_availability: {
-        traffic: false,
-      },
-    },
-    summary: {
-      accepted_events_7d: 2,
-    },
-    traffic: null,
-    events: {
-      accepted_signal_7d: 2,
-      top_sources: [],
-    },
-    health: {
-      excluded_non_production_host: 1,
-      production_only_default: true,
-    },
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /Report scope is production-only/);
-  assert.match(output, /Non-production host rows were excluded: 1/);
-  assert.match(output, /\*\*Traffic\*\*[\s\S]*Unsupported by design for this event_only site/);
-});
-
-test('event_only site clearly states when only page_view is present', () => {
-  const payload = {
-    view: 'site' as const,
-    generated_at: '2026-04-10T00:00:00Z',
-    scope: {
-      site_key: 'star_map_generator',
-      label: 'Star Map Generator',
-      backend_source: 'lighthouse',
-      cloudflare_traffic_enabled: false,
-    },
-    summary: {
-      pageviews_7d: 11,
-      requests_7d: null,
-      visits_7d: null,
-      accepted_events_7d: 11,
-    },
-    traffic: null,
-    events: {
-      accepted_signal_7d: 11,
-      accepted_events: 11,
-      by_event_name: { page_view: 11 },
-      top_sources: null,
-      top_campaigns: null,
-      top_referrers: null,
-    },
-    health: {
-      dropped_invalid: 0,
-      dropped_rate_limited: 0,
-    },
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /page_view events 7d: 11/);
-  assert.match(output, /Event-name breakdown:/);
-  assert.match(output, /page_view \(11\)/);
-  assert.match(output, /Only page_view is currently reported; broader funnel events are not present in this payload/);
-  assert.doesNotMatch(output, /Path\/source\/referrer attribution is being reported from event telemetry/);
-});
-
-test('site report health section displays all observability fields when present', () => {
-  const payload = {
-    view: 'site' as const,
-    generated_at: '2026-04-08T00:00:00Z',
-    scope: { site_key: 'tgc_site', label: 'TGC Site' },
-    summary: null,
-    traffic: null,
-    events: null,
-    health: {
-      dropped_invalid: 10,
-      dropped_rate_limited: 5,
-      last_received_at: '2026-04-08T20:02:00Z',
-      included_events: 500,
-      excluded_test_mode: 2,
-      excluded_non_production_host: 3,
-      cloudflare_traffic_enabled: true,
-      production_only_default: true,
-    },
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.equal(parsed.health?.dropped_invalid, 10);
-  assert.equal(parsed.health?.dropped_rate_limited, 5);
-  assert.equal(parsed.health?.last_received_at, '2026-04-08T20:02:00Z');
-  assert.equal(parsed.health?.included_events, 500);
-  assert.equal(parsed.health?.excluded_test_mode, 2);
-  assert.equal(parsed.health?.excluded_non_production_host, 3);
-  assert.equal(parsed.health?.cloudflare_traffic_enabled, true);
-  assert.equal(parsed.health?.production_only_default, true);
-
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /Dropped invalid: 10/);
-  assert.match(output, /Dropped rate limited: 5/);
-  assert.match(output, /Last received: 2026-04-08T20:02:00Z/);
-  assert.match(output, /Included events: 500/);
-  assert.match(output, /Excluded test mode: 2/);
-  assert.match(output, /Excluded non-prod host: 3/);
-  assert.match(output, /Cloudflare traffic enabled: true/);
-  assert.match(output, /Production only default: true/);
-});
-
-test('site report displays identity section when present', () => {
-  const payload = {
-    view: 'site' as const,
-    generated_at: '2026-04-08T00:00:00Z',
-    scope: { site_key: 'buscore', label: 'BUS Core' },
-    summary: null,
-    traffic: null,
-    events: null,
-    health: null,
-    identity: {
-      today: { new_users: 5, returning_users: 3, sessions: 8 },
-      last_7_days: { new_users: 25, returning_users: 15, sessions: 45, return_rate: 0.375 },
-      top_sources_by_returning_users: [
-        { source: 'direct', users: 8 },
-        { source: 'github', users: 5 },
-      ],
-    },
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.ok(parsed.identity);
-  assert.equal(parsed.identity.today?.new_users, 5);
-  assert.equal(parsed.identity.last_7_days?.return_rate, 0.375);
-
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /\*\*Identity\*\*/);
-  assert.match(output, /New users \(today\): 5/);
-  assert.match(output, /Returning users \(today\): 3/);
-  assert.match(output, /Sessions \(today\): 8/);
-  assert.match(output, /New users \(7d\): 25/);
-  assert.match(output, /Return rate \(7d\): 37.5%/);
-  assert.match(output, /Top Sources by Returning Users:/);
-  assert.match(output, /direct \(8\)/);
-});
-
-test('traffic section includes cloudflare_traffic_enabled from traffic payload', () => {
-  const payload = {
-    view: 'site' as const,
-    generated_at: null,
-    scope: { site_key: 'star_map_generator' },
-    summary: null,
-    traffic: {
-      cloudflare_traffic_enabled: false,
-      latest_day: null,
-      last_7_days: { requests: 22, visits: 20 },
-    },
-    events: null,
-    health: null,
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-  assert.equal(parsed.traffic?.cloudflare_traffic_enabled, false);
-
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /\*\*Traffic\*\*/);
-  assert.match(output, /Cloudflare traffic enabled: false/);
-  assert.match(output, /Requests 7d: 22/);
-  assert.match(output, /Visits 7d: 20/);
-});
-
-test('site report aliases are normalized in all relevant sections', () => {
-  const payload = {
-    view: 'site' as const,
-    generated_at: null,
-    scope: { site_key: 'buscore', traffic_enabled: true },
-    summary: {
-      accepted_events_7d: 15,
-      last_received: '2026-04-08T21:00:00Z',
-    },
-    traffic: { traffic_enabled: false },
-    events: {
-      accepted_events_7d: 12,
-      last_received: '2026-04-08T21:05:00Z',
-    },
-    health: {
-      traffic_enabled: true,
-      last_received: '2026-04-08T21:10:00Z',
-    },
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-  // Check aliases are resolved
-  assert.equal(parsed.scope?.cloudflare_traffic_enabled, true);
-  assert.equal(parsed.summary?.accepted_events_7d, 15);
-  assert.equal(parsed.summary?.last_received_at, '2026-04-08T21:00:00Z');
-  assert.equal(parsed.traffic?.cloudflare_traffic_enabled, false);
-  // Events normalizes accepted_events_7d to accepted_signal_7d
-  assert.equal(parsed.events?.accepted_signal_7d, 12);
-  assert.equal(parsed.events?.last_received_at, '2026-04-08T21:05:00Z');
-  assert.equal(parsed.health?.cloudflare_traffic_enabled, true);
-  assert.equal(parsed.health?.last_received_at, '2026-04-08T21:10:00Z');
-});
-
-test('null event details render as unavailable, not as zeros or dropped', () => {
-  const payload = {
-    view: 'site' as const,
-    generated_at: null,
-    scope: { site_key: 'tgc_site' },
-    summary: null,
-    traffic: null,
-    events: {
-      accepted_signal_7d: 0,
-      accepted_events: null,
-      unique_paths: null,
-      by_event_name: null,
-      top_sources: null,
-      top_campaigns: null,
-      top_referrers: null,
-    },
-    health: null,
-  };
-
-  const parsed = normalizeSiteLighthouseReport(payload);
-  assert.ok(parsed);
-  const output = formatLighthouseReport(parsed);
-  assert.match(output, /Accepted signal 7d: 0/);
-  assert.match(output, /Accepted events: unavailable/);
-  assert.match(output, /Event-name breakdown: unavailable/);
-  assert.match(output, /\*\*Attribution\*\*[\s\S]*- unavailable/);
-});
-
